@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      2.9
+// @version      3.0
 // @description  All-in-one: ✅ war targets, ✈️ travel helper, 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain timer + repeating chain alarm, ⚡ energy alert, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
@@ -129,6 +129,8 @@ document.documentElement.dataset.novaTornHelper = '1';
     font:bold 11px Arial,sans-serif;cursor:pointer;vertical-align:middle}
   .nova-pxmsg{margin-left:4px;font:bold 11px Arial,sans-serif;color:#2e7d32;vertical-align:middle}
   #eht-prof{margin:6px 0;padding:6px 10px;border-radius:5px;color:#000;font:bold 13px Arial,sans-serif}
+  .eht-ov{position:absolute;right:1px;top:50%;transform:translateY(-50%);margin:0;z-index:2;
+    font-size:10px;line-height:12px;padding:1px 3px;box-shadow:0 0 2px #000}
   #eht-panel .ffcol{display:flex;gap:6px;align-items:center}
   /* Torn's own text stays in place (keeps the cell's size) but is made invisible;
      our label is pinned on top of it inside the same cell. */
@@ -570,11 +572,20 @@ document.documentElement.dataset.novaTornHelper = '1';
 
       // FF badge next to the name
       if (!ffGet(id)) missing.push(id);
-      let badge = a.nextElementSibling;          // the badge right after this name
+      // Honor-bar names (an image): the badge sits ON the right end of the bar, so it
+      // takes no extra width and can't spill into the Level column.
+      // Plain text names: the badge goes right after the name.
+      const onBar = !!a.querySelector('img');
+      let badge = onBar ? a.querySelector(':scope > .eht-ff') : a.nextElementSibling;
       if (!badge || !badge.classList.contains('eht-ff')) {
         badge = document.createElement('span');
-        badge.className = 'eht-ff';
-        a.after(badge);
+        badge.className = onBar ? 'eht-ff eht-ov' : 'eht-ff';
+        if (onBar) {
+          if (getComputedStyle(a).position === 'static') a.style.position = 'relative';
+          a.appendChild(badge);
+        } else {
+          a.after(badge);
+        }
       }
       const b = ffBadge(id);
       if (badge.textContent !== b.text) badge.textContent = b.text;
