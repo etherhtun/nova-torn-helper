@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      2.6
+// @version      2.7
 // @description  All-in-one: ✅ war targets, ✈️ travel helper, 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain timer + repeating chain alarm, ⚡ energy alert, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
@@ -487,9 +487,18 @@ document.documentElement.dataset.novaTornHelper = '1';
       LS.set('ff', JSON.stringify(ffCache));
     } catch (e) {
       ffError = 'FF: ' + (e.message || e) + ' (is your key registered at ffscouter.com?)';
+      // say it once per page, so a stuck "…" badge never leaves you guessing
+      if (!ffWarned) {
+        ffWarned = true;
+        toast.textContent = '⚠️ FF badges: FFScouter refused your API key. Register this key at ffscouter.com, then reload.';
+        toast.style.display = 'block';
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => { toast.style.display = 'none'; }, 12000);
+      }
     }
     ffBusy = false;
   }
+  let ffWarned = false;
 
   function ffColor(ff) {
     if (ff <= 1.5) return '#3b6bff';
@@ -501,7 +510,7 @@ document.documentElement.dataset.novaTornHelper = '1';
 
   function ffBadge(id) {
     const e = ffGet(id);
-    if (!e) return { text: '…', bg: '#666', title: 'Loading FF' };
+    if (!e) return ffError ? { text: '!', bg: '#c0392b', title: ffError } : { text: '…', bg: '#666', title: 'Loading FF' };
     if (e.ff == null) return { text: '?', bg: '#666', title: 'No FF estimate' };
     return { text: Number(e.ff).toFixed(2), bg: ffColor(e.ff), title: `FF ${e.ff}  ·  est. stats ${e.bs ?? '?'}` };
   }
