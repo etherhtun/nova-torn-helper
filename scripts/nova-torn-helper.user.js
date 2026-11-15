@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      2.8
+// @version      2.9
 // @description  All-in-one: ✅ war targets, ✈️ travel helper, 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain timer + repeating chain alarm, ⚡ energy alert, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
@@ -508,10 +508,11 @@ document.documentElement.dataset.novaTornHelper = '1';
     return '#ef4444';
   }
 
-  // What badges show; tap/click any badge to switch: Both → Stats → FF
-  const FF_MODES = { both: 'FF + est. stats', stats: 'est. stats', ff: 'FF' };
-  let ffMode = LS.get('ffmode', 'both');
-  if (!FF_MODES[ffMode]) ffMode = 'both';
+  // What badges show: est. stats (default) or FF. Tap/click any badge to switch.
+  // The colour always follows FF (blue = easy … red = very hard).
+  const FF_MODES = { stats: 'est. stats', ff: 'FF' };
+  let ffMode = LS.get('ffmode', 'stats');
+  if (!FF_MODES[ffMode]) ffMode = 'stats';
   document.addEventListener('click', (ev) => {
     const b = ev.target.closest && ev.target.closest('.eht-ff');
     if (!b || b.closest('#eht-card')) return;
@@ -531,7 +532,7 @@ document.documentElement.dataset.novaTornHelper = '1';
     if (!e) return ffError ? { text: '!', bg: '#c0392b', title: ffError } : { text: '…', bg: '#666', title: 'Loading FF' };
     if (e.ff == null) return { text: '?', bg: '#666', title: 'No FF estimate' };
     const ff = Number(e.ff).toFixed(2), bs = e.bs ?? '?';
-    const text = ffMode === 'ff' ? ff : ffMode === 'stats' ? bs : `${ff} · ${bs}`;
+    const text = ffMode === 'ff' ? ff : bs;
     return { text, bg: ffColor(e.ff), title: `FF ${ff}  ·  est. stats ${bs}  (tap to switch)` };
   }
 
