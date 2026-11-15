@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      1.9
+// @version      2.0
 // @description  All-in-one: 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain + ⚡ energy alerts, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
@@ -498,7 +498,10 @@ document.documentElement.dataset.novaTornHelper = '1';
       if (!cell) continue;
       // We never overwrite Torn's own text (Torn redraws it and they'd clash).
       // Instead we hide it and show our own label in the same cell.
-      const m = hosp.get(id), w = away.get(id);
+      let m = hosp.get(id), w = away.get(id);
+      // Hospital abroad: Torn draws this cell its own way (flag etc.) and our label
+      // clashed with it, so leave those cells to Torn for now.
+      if (m && m.flag) { m = null; w = null; }
       let lbl = cell.querySelector(':scope > .eht-lbl');
       if (!m && !w) {                  // nothing to show → give the cell back to Torn
         if (lbl) lbl.remove();
