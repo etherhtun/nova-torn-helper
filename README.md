@@ -31,3 +31,8 @@ When the script changes, raise `@version` — then PDA's **Check for Update** / 
 ### 3. Stock fill (company Stock page)
 - **Fill stock** button fills each order box with that item's share of free storage, by daily sales.
 - It never orders anything — you check the numbers and press Torn's order button yourself.
+
+### 4. Chain + energy alerts (every page)
+- ⛓️ **Chain alert:** beeps when your faction chain timer drops to 60s and again at 30s (chains of 10+).
+- ⚡ **Energy full alert:** beeps once when your energy bar is full.
+- Turn all alerts on/off with the 🔔 button in the 🏥 panel. Alerts only work while Torn is open.

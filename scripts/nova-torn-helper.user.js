@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      1.2
-// @description  All-in-one: 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
+// @version      1.3
+// @description  All-in-one: ⛓️ chain + ⚡ energy alerts, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
 // @connect      ffscouter.com
@@ -127,11 +127,12 @@
     } catch {}
   }
   let toastTimer = 0;
-  function ring(m, left) {
+  function ring(m, left) { notify(`🔔 ${m.name} leaves hospital in ${left}s`); }
+  function notify(text) {
     beep();
     try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch {}
     btn.classList.add('eht-ring');
-    toast.textContent = `🔔 ${m.name} leaves hospital in ${left}s`;
+    toast.textContent = text;
     toast.style.display = 'block';
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => { toast.style.display = 'none'; btn.classList.remove('eht-ring'); }, 6000);
@@ -558,9 +559,57 @@
   };
   cq('#eht-next').onclick = findTarget;
 
+  // ---------- ⛓️ chain + ⚡ energy alerts ----------
+  // One API call (your bars) every 60s, every 15s while a chain is running.
+  const CHAIN_ALERT = [60, 30];       // beep when the chain timer drops to these seconds
+  let bars = null, barsT = 0;
+  const chainFired = new Set();
+
+  async function loadBars() {
+    if (!getKey()) return;
+    try { bars = await api('user/?selections=bars'); barsT = Date.now(); } catch {}
+  }
+  const chainActive = () => bars?.chain && bars.chain.current >= 10 && bars.chain.timeout > 0;
+
+  function checkBars() {
+    if (!bars || !alertOn) return;
+    const gone = Math.floor((Date.now() - barsT) / 1000);
+
+    const c = bars.chain;
+    if (chainActive()) {
+      const left = c.timeout - gone;
+      if (left > CHAIN_ALERT[0]) chainFired.clear();          // someone hit → reset
+      for (const t of CHAIN_ALERT) {
+        if (left > 0 && left <= t && !chainFired.has(t)) {
+          CHAIN_ALERT.forEach(x => { if (x >= t) chainFired.add(x); });
+          notify(`⛓️ Chain ${c.current}: ${left}s left — hit now!`);
+        }
+      }
+    }
+
+    const e = bars.energy;
+    if (e) {
+      const full = e.current >= e.maximum || (e.fulltime > 0 && e.fulltime - gone <= 0);
+      // remembered across pages so it only beeps once per full bar
+      if (full && LS.get('efull', '0') !== '1') {
+        LS.set('efull', '1');
+        notify(`⚡ Energy full (${e.maximum}) — use it before regen is wasted!`);
+      }
+      if (!full) LS.set('efull', '0');
+    }
+  }
+
+  setInterval(() => {
+    if (document.hidden) return;
+    const age = Date.now() - barsT;
+    if (age > (chainActive() ? 15000 : 60000)) loadBars();
+  }, 5000);
+  loadBars();
+
   // ---------- loops ----------
   setInterval(() => {
     checkAlerts();
+    checkBars();
     if (document.hidden) return;
     renderPanel();
     decorateRows();
