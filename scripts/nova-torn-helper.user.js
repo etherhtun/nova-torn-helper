@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      1.5
-// @description  All-in-one: 💲 item market price helper, ⛓️ chain + ⚡ energy alerts, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
+// @version      1.6
+// @description  All-in-one: 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain + ⚡ energy alerts, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_registerMenuCommand
@@ -46,7 +46,8 @@
     document.body.appendChild(bar);
   }
 
-  let hosp = new Map();      // id -> {id,name,level,until}
+  let hosp = new Map();      // id -> {id,name,level,until,flag}
+  let away = new Map();      // id -> {label, desc, flag}  (abroad / traveling)
   let enemyList = [];        // hospital members of the enemy faction (for the panel)
   let ownFactionId = null;
   let ownId = '';            // your own player ID (no FF badge on yourself)
@@ -106,7 +107,8 @@
   #eht-panel .ffcol{display:flex;gap:6px;align-items:center}
   .eht-cd{font-family:monospace!important;font-weight:bold!important;color:#ff6b6b!important}
   .eht-cd.eht-soon{color:#ffd700!important}
-  .eht-cd.eht-out{color:#5dff7a!important}`;
+  .eht-cd.eht-out{color:#5dff7a!important}
+  .eht-tr{color:#4fc3f7!important;font-weight:bold!important;white-space:nowrap}`;
   document.head.appendChild(style);
 
   // ---------- panel ----------
@@ -233,7 +235,7 @@
           return `<div class="row" data-id="${m.id}">
             <a href="https://www.torn.com/profiles.php?XID=${m.id}">${m.name} [${m.level}]</a>
             <span class="ffcol"><span class="eht-ff" style="background:${b.bg}" title="${b.title}">${b.text}</span>
-            <span class="t"></span>
+            <span class="t">${m.flag || ''}</span>
             <a class="atk" href="https://www.torn.com/loader.php?sid=attack&user2ID=${m.id}" title="Attack">⚔️</a></span></div>`;
         }).join('')
           + (ffError ? `<div class="msg">⚠️ ${ffError}</div>` : '')
@@ -249,7 +251,7 @@
       const left = m.until - now;
       row.classList.toggle('out', left <= 0);
       row.classList.toggle('soon', left > 0 && left <= SOON_SEC);
-      row.querySelector('.t').textContent = fmt(left);
+      row.querySelector('.t').textContent = (m.flag ? m.flag + ' ' : '') + fmt(left);
     }
     const foot = q('#eht-foot');
     if (foot) foot.textContent = `${rows.length} in hospital · updated ${Math.max(0, now - Math.floor(lastFetch / 1000))}s ago`;
@@ -298,6 +300,25 @@
     return LS.get('fid', '');
   }
 
+  // ---------- where is everyone? (Abroad / Traveling) ----------
+  const COUNTRIES = [
+    ['Mexic', '🇲🇽', 'Mexico'], ['Cayman', '🇰🇾', 'Cayman'], ['Canad', '🇨🇦', 'Canada'],
+    ['Hawai', '🇺🇸', 'Hawaii'], ['United Kingdom', '🇬🇧', 'UK'], ['British', '🇬🇧', 'UK'],
+    ['Argentin', '🇦🇷', 'Argentina'], ['Switzerland', '🇨🇭', 'Swiss'], ['Swiss', '🇨🇭', 'Swiss'],
+    ['Japan', '🇯🇵', 'Japan'], ['Chin', '🇨🇳', 'China'], ['UAE', '🇦🇪', 'UAE'], ['Emirat', '🇦🇪', 'UAE'],
+    ['South Africa', '🇿🇦', 'S.Africa'],
+  ];
+  // "In Japan" → 🇯🇵 Japan · "Traveling to Japan" → ✈ 🇯🇵 Japan · "Returning to Torn from Japan" → 🇯🇵 ✈ Torn
+  function where(st) {
+    const d = st.description || '';
+    const c = COUNTRIES.find(([k]) => d.includes(k));
+    if (!c) return null;
+    const [, flag, name] = c;
+    let label = `${flag} ${name}`;
+    if (st.state === 'Traveling') label = d.startsWith('Returning') ? `${flag} ✈ Torn` : `✈ ${flag} ${name}`;
+    return { flag, label, desc: d };
+  }
+
   async function fetchFaction(fid) {
     let list;
     try {
@@ -307,9 +328,7 @@
       const j = await api(`faction/${fid}?selections=basic`);
       list = Object.entries(j.members || {}).map(([id, m]) => ({ id: String(id), name: m.name, level: m.level, st: m.status }));
     }
-    return list
-      .filter(m => m.st && m.st.state === 'Hospital')
-      .map(m => ({ id: m.id, name: m.name, level: m.level, until: m.st.until }));
+    return list.filter(m => m.st);
   }
 
   let busy = false;
@@ -328,13 +347,22 @@
       const urlId = new URL(location.href).searchParams.get('ID');
       if (urlId && location.href.includes('step=profile')) ids.add(urlId);
 
-      const next = new Map();
+      const next = new Map(), nextAway = new Map();
       for (const fid of ids) {
-        const list = await fetchFaction(fid);
-        list.forEach(m => next.set(m.id, m));
-        if (fid === enemy) enemyList = list.sort((a, b) => a.until - b.until);
+        const hl = [];
+        for (const m of await fetchFaction(fid)) {
+          const w = where(m.st);
+          if (m.st.state === 'Hospital') {
+            const h = { id: m.id, name: m.name, level: m.level, until: m.st.until, flag: w ? w.flag : '' };
+            hl.push(h); next.set(m.id, h);
+          } else if (w && (m.st.state === 'Abroad' || m.st.state === 'Traveling')) {
+            nextAway.set(m.id, w);
+          }
+        }
+        if (fid === enemy) enemyList = hl.sort((a, b) => a.until - b.until);
       }
       hosp = next;
+      away = nextAway;
       lastError = '';
     } catch (e) {
       lastError = e.message;
@@ -419,7 +447,7 @@
       if (el.closest('#eht-panel')) continue;
       if (el.children.length && !el.querySelector('.eht-cd')) continue; // only leaf text cells
       const t = el.textContent.trim();
-      if (el.dataset.eht || /^(Hospital|OUT|[\d:]+)$/.test(t)) return el;
+      if (el.dataset.eht || /^(Hospital|OUT|Abroad|Traveling|[\d:]+)$/.test(t)) return el;
     }
     return null;
   }
@@ -458,17 +486,32 @@
       if (!onFaction) continue;
       const cell = findStatusCell(row);
       if (!cell) continue;
-      const m = hosp.get(id);
-      if (!m) {
-        if (cell.dataset.eht) { cell.textContent = 'Hospital'; cell.classList.remove('eht-cd', 'eht-soon', 'eht-out'); delete cell.dataset.eht; }
+      const m = hosp.get(id), w = away.get(id);
+      if (!m && !w) {
+        if (cell.dataset.eht) {        // back to Torn's own text
+          cell.textContent = cell.dataset.ehtOrig || '';
+          cell.classList.remove('eht-cd', 'eht-soon', 'eht-out', 'eht-tr');
+          cell.removeAttribute('title');
+          delete cell.dataset.eht; delete cell.dataset.ehtOrig;
+        }
         continue;
       }
-      const left = m.until - now;
+      if (!cell.dataset.eht) cell.dataset.ehtOrig = cell.textContent.trim();
       cell.dataset.eht = '1';
-      cell.classList.add('eht-cd');
-      cell.classList.toggle('eht-soon', left > 0 && left <= SOON_SEC);
-      cell.classList.toggle('eht-out', left <= 0);
-      const txt = fmt(left);
+      let txt;
+      if (m) {                         // hospital countdown (flag if in a hospital abroad)
+        const left = m.until - now;
+        cell.classList.remove('eht-tr');
+        cell.classList.add('eht-cd');
+        cell.classList.toggle('eht-soon', left > 0 && left <= SOON_SEC);
+        cell.classList.toggle('eht-out', left <= 0);
+        txt = (m.flag ? m.flag + ' ' : '') + fmt(left);
+      } else {                         // abroad / traveling
+        cell.classList.remove('eht-cd', 'eht-soon', 'eht-out');
+        cell.classList.add('eht-tr');
+        cell.title = w.desc;
+        txt = w.label;
+      }
       if (cell.textContent !== txt) cell.textContent = txt;
     }
     if (missing.length) ffFetch([...new Set(missing)]);

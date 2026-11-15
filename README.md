@@ -26,6 +26,7 @@ When the script changes, raise `@version` — then PDA's **Check for Update** / 
 
 ### 2. Enemy hospital timer (faction and war pages)
 - Hospital countdowns in the Status column.
+- 🌍 **Where are they?** "Abroad" / "Traveling" in the Status column becomes the country with its flag: `🇯🇵 Japan`, `✈ 🇲🇽 Mexico` (flying there), `🇦🇪 ✈ Torn` (flying home). Hospital abroad shows the flag before the timer.
 - 🏥 panel: sort by time or FF, "≤5 min" filter, ⚔️ attack link, and a 🔔 alert 20s before an enemy leaves hospital.
 
 ### 3. Stock fill (company Stock page)
