@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      2.1
+// @version      2.2
 // @description  All-in-one: 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain + ⚡ energy alerts, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
@@ -111,8 +111,8 @@ document.documentElement.dataset.novaTornHelper = '1';
   .nova-pxmsg{margin-left:4px;font:bold 11px Arial,sans-serif;color:#2e7d32;vertical-align:middle}
   #eht-prof{margin:6px 0;padding:6px 10px;border-radius:5px;color:#000;font:bold 13px Arial,sans-serif}
   #eht-panel .ffcol{display:flex;gap:6px;align-items:center}
-  .eht-host{font-size:0!important}
-  .eht-host > :not(.eht-lbl){display:none!important}
+  [data-eht-host]{font-size:0!important}
+  [data-eht-host] > :not(.eht-lbl){display:none!important}
   .eht-lbl{font-size:12px!important;white-space:nowrap}
   .eht-cd{font-family:monospace!important;font-weight:bold!important;color:#ff6b6b!important}
   .eht-cd.eht-soon{color:#ffd700!important}
@@ -459,7 +459,7 @@ document.documentElement.dataset.novaTornHelper = '1';
     const cands = row.querySelectorAll('.status, [class*="status"]');
     for (const el of cands) {
       if (el.closest('#eht-panel')) continue;
-      if (el.classList.contains('eht-host')) return el;
+      if (el.dataset.ehtHost) return el;
       if (el.querySelector('.status, [class*="status"]')) continue;   // want the innermost one
       const t = el.textContent.trim();
       if (/^(Hospital|OUT|Abroad|Traveling|Okay|[\d:]+)$/.test(t)) return el;
@@ -503,14 +503,11 @@ document.documentElement.dataset.novaTornHelper = '1';
       if (!cell) continue;
       // We never overwrite Torn's own text (Torn redraws it and they'd clash).
       // Instead we hide it and show our own label in the same cell.
-      let m = hosp.get(id), w = away.get(id);
-      // Hospital abroad: Torn draws this cell its own way (flag etc.) and our label
-      // clashed with it, so leave those cells to Torn for now.
-      if (m && m.flag) { m = null; w = null; }
+      const m = hosp.get(id), w = away.get(id);
       let lbl = cell.querySelector(':scope > .eht-lbl');
       if (!m && !w) {                  // nothing to show → give the cell back to Torn
         if (lbl) lbl.remove();
-        cell.classList.remove('eht-host');
+        delete cell.dataset.ehtHost;
         continue;
       }
       if (!lbl) {
@@ -518,7 +515,7 @@ document.documentElement.dataset.novaTornHelper = '1';
         lbl.className = 'eht-lbl';
         cell.appendChild(lbl);
       }
-      cell.classList.add('eht-host');
+      cell.dataset.ehtHost = '1';
       let txt;
       if (m) {                         // hospital countdown (flag if in a hospital abroad)
         const left = m.until - now;
