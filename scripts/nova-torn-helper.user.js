@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      3.0
+// @version      3.1
 // @description  All-in-one: ✅ war targets, ✈️ travel helper, 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain timer + repeating chain alarm, ⚡ energy alert, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
@@ -207,6 +207,18 @@ document.documentElement.dataset.novaTornHelper = '1';
     }
   }
 
+  // Attack page address. Torn moved it (old loader.php links now give an error),
+  // so copy the address from one of Torn's own Attack buttons when the page has one.
+  function attackUrl(id) {
+    const own = document.querySelector('a[href*="sid=attack"][href*="user2ID="]:not(.atk):not(#eht-atk)');
+    if (own) {
+      const u = new URL(own.href, location.origin);
+      u.searchParams.set('user2ID', id);
+      return u.href;
+    }
+    return `https://www.torn.com/page.php?sid=attack&user2ID=${id}`;
+  }
+
   function fmt(sec) {
     if (sec <= 0) return 'OUT';
     const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
@@ -279,7 +291,7 @@ document.documentElement.dataset.novaTornHelper = '1';
             <a href="https://www.torn.com/profiles.php?XID=${m.id}">${m.name} [${m.level}]</a>
             <span class="ffcol"><span class="eht-ff" style="background:${b.bg}" title="${b.title}">${b.text}</span>
             <span class="t">${m.flag || ''}</span>
-            <a class="atk" href="https://www.torn.com/loader.php?sid=attack&user2ID=${m.id}" title="Attack">⚔️</a></span></div>`;
+            <a class="atk" href="${attackUrl(m.id)}" title="Attack">⚔️</a></span></div>`;
         }).join('')
           + (ffError ? `<div class="msg">⚠️ ${ffError}</div>` : '')
           + `<div class="msg" id="eht-foot"></div>`;
@@ -317,7 +329,7 @@ document.documentElement.dataset.novaTornHelper = '1';
         return `<div class="row" data-id="${m.id}">
           <a href="https://www.torn.com/profiles.php?XID=${m.id}">${DOT[m.la] || '⚪'} ${m.name} [${m.level}]</a>
           <span class="ffcol"><span class="eht-ff" style="background:${b.bg}" title="${b.title}">${b.text}</span>
-          <a class="atk" href="https://www.torn.com/loader.php?sid=attack&user2ID=${m.id}" title="Attack">⚔️</a></span></div>`;
+          <a class="atk" href="${attackUrl(m.id)}" title="Attack">⚔️</a></span></div>`;
       }).join('') + `<div class="msg" id="eht-foot"></div>`;
     }
     const foot = q('#eht-foot');
@@ -715,7 +727,7 @@ document.documentElement.dataset.novaTornHelper = '1';
           <span class="eht-ff" style="background:${t.ff != null ? ffColor(t.ff) : '#666'}">${ff}</span><br>
           est. stats ${t.bs} · last active ${p.last_action?.relative ?? '?'}`);
         const atk = cq('#eht-atk');
-        atk.href = `https://www.torn.com/loader.php?sid=attack&user2ID=${t.id}`;
+        atk.href = attackUrl(t.id);
         atk.classList.remove('off');
         return;
       }
