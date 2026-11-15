@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      2.2
+// @version      2.3
 // @description  All-in-one: 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain + ⚡ energy alerts, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
@@ -111,9 +111,12 @@ document.documentElement.dataset.novaTornHelper = '1';
   .nova-pxmsg{margin-left:4px;font:bold 11px Arial,sans-serif;color:#2e7d32;vertical-align:middle}
   #eht-prof{margin:6px 0;padding:6px 10px;border-radius:5px;color:#000;font:bold 13px Arial,sans-serif}
   #eht-panel .ffcol{display:flex;gap:6px;align-items:center}
-  [data-eht-host]{font-size:0!important}
-  [data-eht-host] > :not(.eht-lbl){display:none!important}
-  .eht-lbl{font-size:12px!important;white-space:nowrap}
+  /* Torn's own text stays in place (keeps the cell's size) but is made invisible;
+     our label is pinned on top of it inside the same cell. */
+  [data-eht-host]{position:relative!important;color:transparent!important}
+  [data-eht-host] > :not(.eht-lbl){visibility:hidden!important}
+  .eht-lbl{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    font-size:12px!important;line-height:14px!important;white-space:nowrap;pointer-events:none}
   .eht-cd{font-family:monospace!important;font-weight:bold!important;color:#ff6b6b!important}
   .eht-cd.eht-soon{color:#ffd700!important}
   .eht-cd.eht-out{color:#5dff7a!important}
@@ -455,16 +458,17 @@ document.documentElement.dataset.novaTornHelper = '1';
   }
 
   // ---------- inline timers + FF in the member list ----------
+  // The row's Status cell. If the "row" holds more than one Status cell it is
+  // really a whole list (Torn wraps lists in an <li> too), so we skip it.
   function findStatusCell(row) {
-    const cands = row.querySelectorAll('.status, [class*="status"]');
-    for (const el of cands) {
+    const found = [];
+    for (const el of row.querySelectorAll('.status, [class*="status"]')) {
       if (el.closest('#eht-panel')) continue;
-      if (el.dataset.ehtHost) return el;
+      if (el.dataset.ehtHost) { found.push(el); continue; }
       if (el.querySelector('.status, [class*="status"]')) continue;   // want the innermost one
-      const t = el.textContent.trim();
-      if (/^(Hospital|OUT|Abroad|Traveling|Okay|[\d:]+)$/.test(t)) return el;
+      if (/^(Hospital|OUT|Abroad|Traveling|Okay|[\d:]+)$/.test(el.textContent.trim())) found.push(el);
     }
-    return null;
+    return found.length === 1 ? found[0] : null;
   }
 
   // FF badge next to player names on every page (like FFScouter);
@@ -487,8 +491,8 @@ document.documentElement.dataset.novaTornHelper = '1';
 
       // FF badge next to the name
       if (!ffGet(id)) missing.push(id);
-      let badge = row.querySelector('.eht-ff');
-      if (!badge) {
+      let badge = a.nextElementSibling;          // the badge right after this name
+      if (!badge || !badge.classList.contains('eht-ff')) {
         badge = document.createElement('span');
         badge.className = 'eht-ff';
         a.after(badge);
