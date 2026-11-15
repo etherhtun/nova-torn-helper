@@ -1,10 +1,11 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      1.4
+// @version      1.5
 // @description  All-in-one: 💲 item market price helper, ⛓️ chain + ⚡ energy alerts, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
+// @grant        GM_registerMenuCommand
 // @connect      ffscouter.com
 // @connect      api.torn.com
 // @downloadURL  https://raw.githubusercontent.com/etherhtun/nova-torn-helper/main/scripts/nova-torn-helper.user.js
@@ -29,6 +30,21 @@
     set: (k, v) => { try { localStorage.setItem('ehtimer_' + k, v); } catch {} },
   };
   const getKey = () => (PDA_KEY.includes('PDA-APIKEY') ? LS.get('key', '') : PDA_KEY);
+
+  // ---------- API key on desktop (PDA fills it in by itself) ----------
+  function askKey() {
+    const k = prompt('Nova Torn Helper\n\nPaste your Torn API key (Limited is enough).\nTorn → Settings → API Keys', LS.get('key', ''));
+    if (k !== null) { LS.set('key', k.trim()); location.reload(); }
+  }
+  if (typeof GM_registerMenuCommand === 'function') GM_registerMenuCommand('🔑 Set API key', askKey);
+  if (!getKey()) {
+    const bar = document.createElement('div');
+    bar.textContent = '🔑 Nova Torn Helper needs your API key — click here to enter it';
+    bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:100000;background:#ffd700;color:#000;'
+      + 'font:bold 14px Arial,sans-serif;text-align:center;padding:10px;cursor:pointer;box-shadow:0 2px 6px #0008';
+    bar.onclick = askKey;
+    document.body.appendChild(bar);
+  }
 
   let hosp = new Map();      // id -> {id,name,level,until}
   let enemyList = [];        // hospital members of the enemy faction (for the panel)
