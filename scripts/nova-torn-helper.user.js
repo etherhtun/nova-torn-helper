@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      3.2
+// @version      3.3
 // @description  All-in-one: ✅ war targets, ✈️ travel helper, 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain timer + repeating chain alarm, ⚡ energy alert, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
@@ -117,8 +117,11 @@ document.documentElement.dataset.novaTornHelper = '1';
   #nova-travel input{width:50px;background:#111;color:#eee;border:1px solid #555;border-radius:4px;padding:2px}
   #nova-travel button{background:#444;color:#eee;border:1px solid #666;border-radius:4px;padding:2px 8px}
   #nova-travel .nt-body{padding:6px 8px}
-  #nova-travel table{width:100%;border-collapse:collapse;font:12px Arial,sans-serif;color:#ddd}
-  #nova-travel th,#nova-travel td{text-align:left;padding:4px 6px;border-bottom:1px solid #333;white-space:nowrap}
+  #nova-travel table{width:100%;border-collapse:collapse;font:12px Arial,sans-serif;color:#eee!important;background:transparent!important}
+  #nova-travel th,#nova-travel td{text-align:left;padding:4px 6px;border-bottom:1px solid #333;white-space:nowrap;
+    color:#eee!important;background:transparent!important;font:12px Arial,sans-serif!important}
+  #nova-travel th{color:#aaa!important;font-weight:bold!important}
+  #nova-travel td b{color:#5dff7a!important}
   #nova-travel .nt-note{color:#999;padding-top:6px;font-size:11px}
   #eht-chain{position:fixed;right:110px;bottom:96px;z-index:99999;display:none;padding:7px 12px;border-radius:18px;
     background:#333;color:#fff;font:bold 14px monospace;box-shadow:0 2px 6px #0008;cursor:pointer;white-space:nowrap}
