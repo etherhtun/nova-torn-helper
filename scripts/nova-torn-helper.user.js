@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      1.7
+// @version      1.8
 // @description  All-in-one: 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain + ⚡ energy alerts, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
@@ -105,6 +105,9 @@
   .nova-pxmsg{margin-left:4px;font:bold 11px Arial,sans-serif;color:#2e7d32;vertical-align:middle}
   #eht-prof{margin:6px 0;padding:6px 10px;border-radius:5px;color:#000;font:bold 13px Arial,sans-serif}
   #eht-panel .ffcol{display:flex;gap:6px;align-items:center}
+  .eht-host{font-size:0!important}
+  .eht-host > :not(.eht-lbl){display:none!important}
+  .eht-lbl{font-size:12px!important;white-space:nowrap}
   .eht-cd{font-family:monospace!important;font-weight:bold!important;color:#ff6b6b!important}
   .eht-cd.eht-soon{color:#ffd700!important}
   .eht-cd.eht-out{color:#5dff7a!important}
@@ -445,9 +448,10 @@
     const cands = row.querySelectorAll('.status, [class*="status"]');
     for (const el of cands) {
       if (el.closest('#eht-panel')) continue;
-      if (el.children.length && !el.querySelector('.eht-cd')) continue; // only leaf text cells
+      if (el.classList.contains('eht-host')) return el;
+      if (el.querySelector('.status, [class*="status"]')) continue;   // want the innermost one
       const t = el.textContent.trim();
-      if (el.dataset.eht || /^(Hospital|OUT|Abroad|Traveling|[\d:]+)$/.test(t)) return el;
+      if (/^(Hospital|OUT|Abroad|Traveling|Okay|[\d:]+)$/.test(t)) return el;
     }
     return null;
   }
@@ -486,33 +490,37 @@
       if (!onFaction) continue;
       const cell = findStatusCell(row);
       if (!cell) continue;
+      // We never overwrite Torn's own text (Torn redraws it and they'd clash).
+      // Instead we hide it and show our own label in the same cell.
       const m = hosp.get(id), w = away.get(id);
-      if (!m && !w) {
-        if (cell.dataset.eht) {        // back to Torn's own text
-          cell.textContent = cell.dataset.ehtOrig || '';
-          cell.classList.remove('eht-cd', 'eht-soon', 'eht-out', 'eht-tr');
-          cell.removeAttribute('title');
-          delete cell.dataset.eht; delete cell.dataset.ehtOrig;
-        }
+      let lbl = cell.querySelector(':scope > .eht-lbl');
+      if (!m && !w) {                  // nothing to show → give the cell back to Torn
+        if (lbl) lbl.remove();
+        cell.classList.remove('eht-host');
         continue;
       }
-      if (!cell.dataset.eht) cell.dataset.ehtOrig = cell.textContent.trim();
-      cell.dataset.eht = '1';
+      if (!lbl) {
+        lbl = document.createElement('span');
+        lbl.className = 'eht-lbl';
+        cell.appendChild(lbl);
+      }
+      cell.classList.add('eht-host');
       let txt;
       if (m) {                         // hospital countdown (flag if in a hospital abroad)
         const left = m.until - now;
-        cell.classList.remove('eht-tr');
-        cell.classList.add('eht-cd');
-        cell.classList.toggle('eht-soon', left > 0 && left <= SOON_SEC);
-        cell.classList.toggle('eht-out', left <= 0);
+        lbl.classList.remove('eht-tr');
+        lbl.classList.add('eht-cd');
+        lbl.classList.toggle('eht-soon', left > 0 && left <= SOON_SEC);
+        lbl.classList.toggle('eht-out', left <= 0);
+        lbl.title = '';
         txt = (m.flag ? m.flag + ' ' : '') + fmt(left);
       } else {                         // abroad / traveling
-        cell.classList.remove('eht-cd', 'eht-soon', 'eht-out');
-        cell.classList.add('eht-tr');
-        cell.title = w.desc;
+        lbl.classList.remove('eht-cd', 'eht-soon', 'eht-out');
+        lbl.classList.add('eht-tr');
+        lbl.title = w.desc;
         txt = w.label;
       }
-      if (cell.textContent !== txt) cell.textContent = txt;
+      if (lbl.textContent !== txt) lbl.textContent = txt;
     }
     if (missing.length) ffFetch([...new Set(missing)]);
   }
