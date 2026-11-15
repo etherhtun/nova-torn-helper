@@ -24,6 +24,13 @@ When the script changes, raise `@version` — then PDA's **Check for Update** / 
 
 - 🎯 **Target finder** (green button): finds a player in your FF range (default 2.0–3.0, inactive only) who is out of hospital/jail/travel, with an ⚔️ Attack button. **Next ▶** gives another one. You press attack yourself.
 
+### ✅ War targets (🏥 panel)
+- Switch the panel between **🏥 Hosp** and **✅ Okay**. ✅ Okay lists every enemy you can hit right now (in Torn, not in hospital, not traveling), highest FF first, with 🟢 online / 🟡 idle / ⚫ offline and ⚔️ attack links.
+
+### ✈️ Travel helper
+- While flying: a blue ✈️ landing countdown on every page, and a beep when you land.
+- On the Travel Agency page: the best item to bring back from each country, ranked by profit per hour for the number of items you can carry (set it in the box). Stock from [YATA](https://yata.yt), values from Torn.
+
 ### 2. Enemy hospital timer (faction and war pages)
 - Hospital countdowns in the Status column.
 - 🌍 **Where are they?** "Abroad" / "Traveling" in the Status column becomes the country with its flag: `🇯🇵 JPN`, `✈ 🇲🇽 MEX` (flying there), `🇦🇪 ✈ Torn` (flying home). Hospital abroad shows the flag before the timer.

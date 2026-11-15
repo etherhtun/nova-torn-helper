@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      2.5
-// @description  All-in-one: 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain timer + repeating chain alarm, ⚡ energy alert, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
+// @version      2.6
+// @description  All-in-one: ✅ war targets, ✈️ travel helper, 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain timer + repeating chain alarm, ⚡ energy alert, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_registerMenuCommand
 // @connect      ffscouter.com
 // @connect      api.torn.com
+// @connect      yata.yt
 // @downloadURL  https://raw.githubusercontent.com/etherhtun/nova-torn-helper/main/scripts/nova-torn-helper.user.js
 // @updateURL    https://raw.githubusercontent.com/etherhtun/nova-torn-helper/main/scripts/nova-torn-helper.user.js
 // ==/UserScript==
@@ -55,6 +56,7 @@ document.documentElement.dataset.novaTornHelper = '1';
   let hosp = new Map();      // id -> {id,name,level,until,flag}
   let away = new Map();      // id -> {label, desc, flag}  (abroad / traveling)
   let enemyList = [];        // hospital members of the enemy faction (for the panel)
+  let enemyOkay = [];        // enemy members who can be hit right now (✅ view)
   let ownFactionId = null;
   let ownId = '';            // your own player ID (no FF badge on yourself)
   let warFactionIds = null;  // [idA, idB] when in a ranked war
@@ -62,6 +64,7 @@ document.documentElement.dataset.novaTornHelper = '1';
   let lastError = '';
 
   // panel settings (remembered)
+  let panelView = LS.get('view', 'hosp');       // 'hosp' | 'okay'
   let sortBy = LS.get('sort', 'time');          // 'time' | 'ff'
   let soonOnly = LS.get('soon', '0') === '1';
   let alertOn = LS.get('alert', '1') === '1';
@@ -84,7 +87,7 @@ document.documentElement.dataset.novaTornHelper = '1';
   #eht-panel .t{font-family:monospace;font-weight:bold}
   #eht-panel .msg{padding:8px;color:#aaa}
   #eht-panel .bar{display:flex;gap:6px;padding:4px 8px;background:#252525;border-bottom:1px solid #333}
-  #eht-panel .bar button{flex:1}
+  #eht-panel .bar button{flex:1;padding:3px 2px}
   #eht-panel .atk{font-size:15px;text-decoration:none}
   #eht-btn.eht-ring{animation:eht-pulse .5s infinite alternate}
   @keyframes eht-pulse{to{background:#ffd700;transform:scale(1.15)}}
@@ -106,6 +109,17 @@ document.documentElement.dataset.novaTornHelper = '1';
   #eht-card #eht-atk{background:#c0392b;color:#fff}
   #eht-card #eht-atk.off{opacity:.35;pointer-events:none}
   #eht-card #eht-next{background:#444;color:#eee}
+  #eht-fly{position:fixed;right:10px;bottom:140px;z-index:99999;display:none;padding:7px 12px;border-radius:18px;
+    background:#1565c0;color:#fff;font:bold 14px monospace;box-shadow:0 2px 6px #0008;white-space:nowrap}
+  #nova-travel{margin:8px 0;background:#1e1e1e;color:#ddd;border:1px solid #444;border-radius:6px;font:12px Arial,sans-serif;overflow-x:auto}
+  #nova-travel .nt-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:8px;background:#2b2b2b;font-weight:bold}
+  #nova-travel .nt-head label{font-weight:normal;margin-left:auto}
+  #nova-travel input{width:50px;background:#111;color:#eee;border:1px solid #555;border-radius:4px;padding:2px}
+  #nova-travel button{background:#444;color:#eee;border:1px solid #666;border-radius:4px;padding:2px 8px}
+  #nova-travel .nt-body{padding:6px 8px}
+  #nova-travel table{width:100%;border-collapse:collapse;font:12px Arial,sans-serif;color:#ddd}
+  #nova-travel th,#nova-travel td{text-align:left;padding:4px 6px;border-bottom:1px solid #333;white-space:nowrap}
+  #nova-travel .nt-note{color:#999;padding-top:6px;font-size:11px}
   #eht-chain{position:fixed;right:110px;bottom:96px;z-index:99999;display:none;padding:7px 12px;border-radius:18px;
     background:#333;color:#fff;font:bold 14px monospace;box-shadow:0 2px 6px #0008;cursor:pointer;white-space:nowrap}
   #eht-chain.warn{background:#b8860b;color:#000}
@@ -209,7 +223,7 @@ document.documentElement.dataset.novaTornHelper = '1';
         <button id="eht-go">Load</button>
       </header>
       <div class="bar">
-        <button id="eht-sort"></button><button id="eht-soon"></button><button id="eht-alert"></button>
+        <button id="eht-view"></button><button id="eht-sort"></button><button id="eht-soon"></button><button id="eht-alert"></button>
       </div>
       <div id="eht-list"></div>`;
     const q = s => panel.querySelector(s);
@@ -219,6 +233,7 @@ document.documentElement.dataset.novaTornHelper = '1';
       LS.set('fid', q('#eht-fid').value.trim());
       refresh(true);
     };
+    q('#eht-view').onclick = () => { panelView = panelView === 'hosp' ? 'okay' : 'hosp'; LS.set('view', panelView); renderPanel(); };
     q('#eht-sort').onclick = () => { sortBy = sortBy === 'time' ? 'ff' : 'time'; LS.set('sort', sortBy); renderPanel(); };
     q('#eht-soon').onclick = () => { soonOnly = !soonOnly; LS.set('soon', soonOnly ? '1' : '0'); renderPanel(); };
     q('#eht-alert').onclick = () => { alertOn = !alertOn; LS.set('alert', alertOn ? '1' : '0'); unlockSound(); renderPanel(); };
@@ -229,11 +244,15 @@ document.documentElement.dataset.novaTornHelper = '1';
     const sk = getKey() ? 'key' : 'nokey';
     if (shellKey !== sk) { buildShell(); shellKey = sk; listSig = ''; }
     const q = s => panel.querySelector(s);
+    const okayView = panelView === 'okay';
+    q('#eht-view').textContent = okayView ? '✅ Okay' : '🏥 Hosp';
     q('#eht-sort').textContent = sortBy === 'time' ? 'Sort: Time' : 'Sort: FF';
     q('#eht-soon').textContent = soonOnly ? '≤5 min ✓' : 'All';
+    q('#eht-sort').style.display = q('#eht-soon').style.display = okayView ? 'none' : '';
     q('#eht-alert').textContent = alertOn ? '🔔 On' : '🔕 Off';
 
     const now = Math.floor(Date.now() / 1000);
+    if (okayView) return renderOkay(q, now);
     let rows = enemyList.slice();
     if (soonOnly) rows = rows.filter(m => m.until - now <= FILTER_SEC);
     if (sortBy === 'ff') rows.sort((a, b) => (ffGet(b.id)?.ff ?? -1) - (ffGet(a.id)?.ff ?? -1));
@@ -277,6 +296,30 @@ document.documentElement.dataset.novaTornHelper = '1';
     }
     const foot = q('#eht-foot');
     if (foot) foot.textContent = `${rows.length} in hospital · updated ${Math.max(0, now - Math.floor(lastFetch / 1000))}s ago`;
+  }
+
+  // ✅ view: enemies who can be hit right now, highest FF first
+  const DOT = { Online: '🟢', Idle: '🟡', Offline: '⚫' };
+  function renderOkay(q, now) {
+    const rows = enemyOkay.slice().sort((a, b) => (ffGet(b.id)?.ff ?? -1) - (ffGet(a.id)?.ff ?? -1));
+    let msg = '';
+    if (lastError) msg = '⚠️ ' + lastError;
+    else if (!enemyFactionId()) msg = 'Enter the enemy faction ID (auto-detected during a ranked war).';
+    else if (!rows.length) msg = 'No enemy is hittable right now (all in hospital / abroad / traveling).';
+    const list = q('#eht-list');
+    const sig = 'okay|' + (msg || rows.map(m => m.id + ':' + m.la + ':' + ffBadge(m.id).text).join(','));
+    if (sig !== listSig) {
+      listSig = sig;
+      list.innerHTML = msg ? `<div class="msg">${msg}</div>` : rows.map(m => {
+        const b = ffBadge(m.id);
+        return `<div class="row" data-id="${m.id}">
+          <a href="https://www.torn.com/profiles.php?XID=${m.id}">${DOT[m.la] || '⚪'} ${m.name} [${m.level}]</a>
+          <span class="ffcol"><span class="eht-ff" style="background:${b.bg}" title="${b.title}">${b.text}</span>
+          <a class="atk" href="https://www.torn.com/loader.php?sid=attack&user2ID=${m.id}" title="Attack">⚔️</a></span></div>`;
+      }).join('') + `<div class="msg" id="eht-foot"></div>`;
+    }
+    const foot = q('#eht-foot');
+    if (foot) foot.textContent = `${rows.length} hittable · 🟢 online 🟡 idle ⚫ offline · updated ${Math.max(0, now - Math.floor(lastFetch / 1000))}s ago`;
   }
 
   // ---------- API ----------
@@ -345,10 +388,10 @@ document.documentElement.dataset.novaTornHelper = '1';
     let list;
     try {
       const j = await api(`v2/faction/${fid}/members`);
-      list = (j.members || []).map(m => ({ id: String(m.id), name: m.name, level: m.level, st: m.status }));
+      list = (j.members || []).map(m => ({ id: String(m.id), name: m.name, level: m.level, st: m.status, la: m.last_action?.status }));
     } catch (e) {
       const j = await api(`faction/${fid}?selections=basic`);
-      list = Object.entries(j.members || {}).map(([id, m]) => ({ id: String(id), name: m.name, level: m.level, st: m.status }));
+      list = Object.entries(j.members || {}).map(([id, m]) => ({ id: String(id), name: m.name, level: m.level, st: m.status, la: m.last_action?.status }));
     }
     return list.filter(m => m.st);
   }
@@ -371,8 +414,9 @@ document.documentElement.dataset.novaTornHelper = '1';
 
       const next = new Map(), nextAway = new Map();
       for (const fid of ids) {
-        const hl = [];
+        const hl = [], ok = [];
         for (const m of await fetchFaction(fid)) {
+          if (m.st.state === 'Okay') ok.push({ id: m.id, name: m.name, level: m.level, la: m.la || '' });
           const w = where(m.st);
           if (m.st.state === 'Hospital') {
             const h = { id: m.id, name: m.name, level: m.level, until: m.st.until, flag: w ? w.flag : '' };
@@ -381,7 +425,7 @@ document.documentElement.dataset.novaTornHelper = '1';
             nextAway.set(m.id, w);
           }
         }
-        if (fid === enemy) enemyList = hl.sort((a, b) => a.until - b.until);
+        if (fid === enemy) { enemyList = hl.sort((a, b) => a.until - b.until); enemyOkay = ok; }
       }
       hosp = next;
       away = nextAway;
@@ -674,7 +718,7 @@ document.documentElement.dataset.novaTornHelper = '1';
   let barsDenied = false;
   async function loadBars() {
     if (!getKey() || barsDenied) return;
-    try { bars = await api('user/?selections=bars'); barsT = Date.now(); }
+    try { bars = await api('user/?selections=bars,travel'); barsT = Date.now(); }
     catch (e) {
       // error 16 = key level too low (Public key) → tell the user once, stop asking
       if (/error 16\b/.test(e.message)) {
@@ -687,6 +731,7 @@ document.documentElement.dataset.novaTornHelper = '1';
       }
     }
   }
+  const flying = () => bars?.travel && bars.travel.time_left > 0;
   const chainActive = () => bars?.chain && bars.chain.current >= 10 && bars.chain.timeout > 0;
   const chainLeft = () => bars.chain.timeout - Math.floor((Date.now() - barsT) / 1000);
 
@@ -712,6 +757,8 @@ document.documentElement.dataset.novaTornHelper = '1';
       chainEl.style.display = 'none';
     }
 
+    checkTravel();
+
     // ⚡ energy full (once per full bar, remembered across pages)
     const e = bars.energy;
     if (e && alertOn) {
@@ -732,6 +779,109 @@ document.documentElement.dataset.novaTornHelper = '1';
     if (age > every) loadBars();
   }, 1000);
   loadBars();
+
+  // ---------- ✈️ travel helper ----------
+  // 1) While flying: a landing countdown on every page, and a beep when you land.
+  // 2) On the travel page: the best item to bring back from each country
+  //    (foreign stock from YATA, item values from Torn), ranked by profit per hour.
+  const flyEl = document.createElement('div');
+  flyEl.id = 'eht-fly';
+  document.body.appendChild(flyEl);
+
+  function placeName(dest) {
+    const w = where({ state: 'Abroad', description: 'In ' + dest });
+    return w ? `${w.flag} ${w.label.split(' ').pop()}` : dest;
+  }
+
+  function checkTravel() {
+    const t = bars?.travel;
+    const panelsOpen = panel.style.display === 'block' || card.style.display === 'block';
+    if (!t || !t.timestamp) { flyEl.style.display = 'none'; return; }
+    const left = t.timestamp - Math.floor(Date.now() / 1000);
+    if (left > 0) {
+      flyEl.style.display = panelsOpen ? 'none' : 'block';
+      flyEl.textContent = `✈️ ${placeName(t.destination)} · ${fmt(left)}`;
+    } else {
+      flyEl.style.display = 'none';
+      // landed in the last 2 minutes → tell once (remembered across pages)
+      if (alertOn && left > -120 && LS.get('landed', '') !== String(t.timestamp)) {
+        LS.set('landed', String(t.timestamp));
+        notify(`✈️ Landed in ${t.destination}!`);
+      }
+    }
+  }
+
+  const FLIGHT_MIN = { mex: 26, cay: 35, can: 41, haw: 134, uni: 159, arg: 167, swi: 175, jap: 225, chi: 242, uae: 271, sou: 297 };
+  const YATA_CC = { mex: '🇲🇽 MEX', cay: '🇰🇾 CAY', can: '🇨🇦 CAN', haw: '🇺🇸 HAW', uni: '🇬🇧 UK', arg: '🇦🇷 ARG',
+    swi: '🇨🇭 SWI', jap: '🇯🇵 JPN', chi: '🇨🇳 CHN', uae: '🇦🇪 UAE', sou: '🇿🇦 SA' };
+  const money = n => {
+    const a = Math.abs(n);
+    const t = a >= 1e9 ? (a / 1e9).toFixed(2) + 'b' : a >= 1e6 ? (a / 1e6).toFixed(1) + 'm' : a >= 1e3 ? Math.round(a / 1e3) + 'k' : String(Math.round(a));
+    return (n < 0 ? '-$' : '$') + t;
+  };
+
+  async function marketValues() {
+    try {
+      const c = JSON.parse(LS.get('mv', 'null'));
+      if (c && Date.now() - c.t < 6 * 3600 * 1000) return c.v;    // cache 6 hours
+    } catch {}
+    const j = await api('torn/?selections=items');
+    const v = {};
+    for (const [id, it] of Object.entries(j.items || {})) v[id] = it.market_value || 0;
+    LS.set('mv', JSON.stringify({ t: Date.now(), v }));
+    return v;
+  }
+
+  let travelBusy = false;
+  async function renderTravelTable(box) {
+    if (travelBusy) return;
+    travelBusy = true;
+    const body = box.querySelector('.nt-body');
+    body.textContent = 'Loading…';
+    try {
+      const cap = Math.max(1, +LS.get('cap', '10') || 10);
+      const [mv, txt] = await Promise.all([marketValues(), httpGet('https://yata.yt/api/v1/travel/export/')]);
+      const stocks = JSON.parse(txt).stocks || {};
+      const rows = [];
+      for (const [cc, c] of Object.entries(stocks)) {
+        if (!FLIGHT_MIN[cc]) continue;
+        let best = null;
+        for (const it of c.stocks || []) {
+          if (!(it.quantity > 0) || !mv[it.id]) continue;
+          const profit = mv[it.id] - it.cost;
+          if (!best || profit > best.profit) best = { name: it.name, profit, qty: it.quantity };
+        }
+        if (!best || best.profit <= 0) continue;
+        const perHour = best.profit * Math.min(cap, best.qty) / (2 * FLIGHT_MIN[cc] / 60);
+        rows.push({ cc, ...best, perHour, age: Math.round((Date.now() / 1000 - (c.update || 0)) / 60) });
+      }
+      rows.sort((a, b) => b.perHour - a.perHour);
+      body.innerHTML = rows.length ? `<table><tr><th>Where</th><th>Best item</th><th>Profit/ea</th><th>Stock</th><th>Per hour*</th><th>Flight</th></tr>`
+        + rows.map(r => `<tr><td>${YATA_CC[r.cc]}</td><td>${r.name}</td><td>${money(r.profit)}</td><td>${r.qty.toLocaleString()}</td>`
+          + `<td><b>${money(r.perHour)}</b></td><td>${Math.floor(FLIGHT_MIN[r.cc] / 60)}:${String(FLIGHT_MIN[r.cc] % 60).padStart(2, '0')}</td></tr>`).join('')
+        + `</table><div class="nt-note">* carrying ${cap} items, round trip, standard flight times. Stock from YATA (updated ${Math.min(...rows.map(r => r.age))}–${Math.max(...rows.map(r => r.age))} min ago).</div>`
+        : 'No profitable items in stock right now.';
+    } catch (e) {
+      body.textContent = '⚠️ Could not load travel data: ' + (e.message || e);
+    }
+    travelBusy = false;
+  }
+
+  function addTravelBox() {
+    const onTravel = location.pathname.includes('travelagency.php') || location.href.includes('sid=travel');
+    if (!onTravel || document.getElementById('nova-travel')) return;
+    const anchor = document.querySelector('.content-title') || document.querySelector('.content-wrapper');
+    if (!anchor) return;
+    const box = document.createElement('div');
+    box.id = 'nova-travel';
+    box.innerHTML = `<div class="nt-head">✈️ Best items to bring back
+        <label>I can carry <input type="number" min="1" class="nt-cap" value="${LS.get('cap', '10')}"> items</label>
+        <button class="nt-go">↻</button></div><div class="nt-body"></div>`;
+    if (anchor.classList.contains('content-title')) anchor.after(box); else anchor.prepend(box);
+    box.querySelector('.nt-cap').onchange = e => { LS.set('cap', String(Math.max(1, +e.target.value || 10))); renderTravelTable(box); };
+    box.querySelector('.nt-go').onclick = () => renderTravelTable(box);
+    renderTravelTable(box);
+  }
 
   // ---------- 💲 item market price helper ----------
   // On the Item Market / Bazaar "add" pages, adds a "−$1" button next to each
@@ -813,8 +963,9 @@ document.documentElement.dataset.novaTornHelper = '1';
     renderPanel();
     decorateRows();
     addPriceButtons();
+    addTravelBox();
     if (panel.style.display === 'block') {
-      const miss = enemyList.map(m => m.id).filter(id => !ffGet(id));
+      const miss = enemyList.concat(enemyOkay).map(m => m.id).filter(id => !ffGet(id));
       if (miss.length) ffFetch(miss);
     }
   }, 1000);
