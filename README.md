@@ -28,3 +28,13 @@ Open the raw link in your browser — Tampermonkey offers to install it. Enter y
 #### FF badges
 
 FF values come from [FFScouter](https://ffscouter.com). Register your API key there once, or the badges show `?`.
+
+### Nova Stock Fill
+
+Adds a **Fill stock** button to your company's Stock page. It fills each order box with that item's share of your free storage, based on daily sales (split evenly if nothing has sold yet). It never orders anything — you check the numbers and press Torn's order button yourself.
+
+**Raw link:**
+
+```
+https://raw.githubusercontent.com/etherhtun/nova-torn-helper/main/scripts/stock-fill.user.js
+```
