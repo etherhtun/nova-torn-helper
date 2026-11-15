@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      2.3
-// @description  All-in-one: 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain + ⚡ energy alerts, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
+// @version      2.4
+// @description  All-in-one: 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain timer + repeating chain alarm, ⚡ energy alert, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_registerMenuCommand
@@ -106,6 +106,11 @@ document.documentElement.dataset.novaTornHelper = '1';
   #eht-card #eht-atk{background:#c0392b;color:#fff}
   #eht-card #eht-atk.off{opacity:.35;pointer-events:none}
   #eht-card #eht-next{background:#444;color:#eee}
+  #eht-chain{position:fixed;right:110px;bottom:96px;z-index:99999;display:none;padding:7px 12px;border-radius:18px;
+    background:#333;color:#fff;font:bold 14px monospace;box-shadow:0 2px 6px #0008;cursor:pointer;white-space:nowrap}
+  #eht-chain.warn{background:#b8860b;color:#000}
+  #eht-chain.urgent{background:#c0392b;animation:eht-blink .5s infinite alternate}
+  @keyframes eht-blink{to{background:#ff0000;transform:scale(1.12)}}
   .nova-px{margin-left:4px;padding:2px 6px;border-radius:4px;border:none;background:#2e7d32;color:#fff;
     font:bold 11px Arial,sans-serif;cursor:pointer;vertical-align:middle}
   .nova-pxmsg{margin-left:4px;font:bold 11px Arial,sans-serif;color:#2e7d32;vertical-align:middle}
@@ -644,38 +649,61 @@ document.documentElement.dataset.novaTornHelper = '1';
   };
   cq('#eht-next').onclick = findTarget;
 
-  // ---------- ⛓️ chain + ⚡ energy alerts ----------
-  // One API call (your bars) every 60s, every 15s while a chain is running.
-  const CHAIN_ALERT = [60, 30];       // beep when the chain timer drops to these seconds
-  let bars = null, barsT = 0;
-  const chainFired = new Set();
+  // ---------- ⛓️ chain alarm + ⚡ energy alert ----------
+  // Uses your bars (one API call): every 60s normally, every 15s while a chain runs,
+  // every 5s when the chain timer is close to running out.
+  const CHAIN_STEPS = [60, 90, 120, 180];          // tap the chain timer to pick one
+  let chainWarn = +LS.get('chainwarn', '90');
+  if (!CHAIN_STEPS.includes(chainWarn)) chainWarn = 90;
+  let bars = null, barsT = 0, lastChainBeep = 0;
+
+  const chainEl = document.createElement('div');
+  chainEl.id = 'eht-chain';
+  chainEl.title = 'Tap to change when the chain alarm starts';
+  document.body.appendChild(chainEl);
+  chainEl.onclick = () => {
+    unlockSound();
+    chainWarn = CHAIN_STEPS[(CHAIN_STEPS.indexOf(chainWarn) + 1) % CHAIN_STEPS.length];
+    LS.set('chainwarn', String(chainWarn));
+    toast.textContent = `⛓️ Chain alarm starts at ${fmt(chainWarn)} left`;
+    toast.style.display = 'block';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toast.style.display = 'none'; }, 3000);
+  };
 
   async function loadBars() {
     if (!getKey()) return;
     try { bars = await api('user/?selections=bars'); barsT = Date.now(); } catch {}
   }
   const chainActive = () => bars?.chain && bars.chain.current >= 10 && bars.chain.timeout > 0;
+  const chainLeft = () => bars.chain.timeout - Math.floor((Date.now() - barsT) / 1000);
 
   function checkBars() {
-    if (!bars || !alertOn) return;
+    if (!bars) { chainEl.style.display = 'none'; return; }
     const gone = Math.floor((Date.now() - barsT) / 1000);
 
-    const c = bars.chain;
-    if (chainActive()) {
-      const left = c.timeout - gone;
-      if (left > CHAIN_ALERT[0]) chainFired.clear();          // someone hit → reset
-      for (const t of CHAIN_ALERT) {
-        if (left > 0 && left <= t && !chainFired.has(t)) {
-          CHAIN_ALERT.forEach(x => { if (x >= t) chainFired.add(x); });
-          notify(`⛓️ Chain ${c.current}: ${left}s left — hit now!`);
+    // ⛓️ chain: on-screen timer + repeating alarm until someone hits
+    if (chainActive() && chainLeft() > -30) {
+      const c = bars.chain, left = chainLeft();
+      chainEl.style.display = 'block';
+      chainEl.textContent = `⛓️ ${c.current} · ${left > 0 ? fmt(left) : '0:00?'}`;
+      chainEl.classList.toggle('warn', left <= chainWarn && left > 30);
+      chainEl.classList.toggle('urgent', left <= 30);
+      if (alertOn && left > 0 && left <= chainWarn) {
+        const every = left <= 30 ? 3000 : 10000;   // faster when it's really close
+        if (Date.now() - lastChainBeep >= every) {
+          lastChainBeep = Date.now();
+          notify(`⛓️ CHAIN ${c.current}: ${fmt(left)} left — HIT NOW!`);
         }
       }
+    } else {
+      chainEl.style.display = 'none';
     }
 
+    // ⚡ energy full (once per full bar, remembered across pages)
     const e = bars.energy;
-    if (e) {
+    if (e && alertOn) {
       const full = e.current >= e.maximum || (e.fulltime > 0 && e.fulltime - gone <= 0);
-      // remembered across pages so it only beeps once per full bar
       if (full && LS.get('efull', '0') !== '1') {
         LS.set('efull', '1');
         notify(`⚡ Energy full (${e.maximum}) — use it before regen is wasted!`);
@@ -687,8 +715,10 @@ document.documentElement.dataset.novaTornHelper = '1';
   setInterval(() => {
     if (document.hidden) return;
     const age = Date.now() - barsT;
-    if (age > (chainActive() ? 15000 : 60000)) loadBars();
-  }, 5000);
+    let every = 60000;
+    if (chainActive()) every = chainLeft() <= 30 ? 3000 : chainLeft() <= chainWarn + 30 ? 5000 : 15000;
+    if (age > every) loadBars();
+  }, 1000);
   loadBars();
 
   // ---------- 💲 item market price helper ----------

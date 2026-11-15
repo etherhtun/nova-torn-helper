@@ -34,7 +34,7 @@ When the script changes, raise `@version` — then PDA's **Check for Update** / 
 - It never orders anything — you check the numbers and press Torn's order button yourself.
 
 ### 4. Chain + energy alerts (every page)
-- ⛓️ **Chain alert:** beeps when your faction chain timer drops to 60s and again at 30s (chains of 10+).
+- ⛓️ **Chain timer + alarm:** while your faction chain (10+) runs, a ⛓️ timer shows on screen. Below the warning time it turns yellow and beeps every 10s; under 30s it flashes red and beeps every 3s — until someone hits. Tap the timer to set when the alarm starts: 1:00 / 1:30 / 2:00 / 3:00 (default 1:30).
 - ⚡ **Energy full alert:** beeps once when your energy bar is full.
 - Turn all alerts on/off with the 🔔 button in the 🏥 panel. Alerts only work while Torn is open.
 
