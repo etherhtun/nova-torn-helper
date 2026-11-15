@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      1.3
-// @description  All-in-one: ⛓️ chain + ⚡ energy alerts, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
+// @version      1.4
+// @description  All-in-one: 💲 item market price helper, ⛓️ chain + ⚡ energy alerts, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
 // @connect      ffscouter.com
@@ -83,6 +83,9 @@
   #eht-card #eht-atk{background:#c0392b;color:#fff}
   #eht-card #eht-atk.off{opacity:.35;pointer-events:none}
   #eht-card #eht-next{background:#444;color:#eee}
+  .nova-px{margin-left:4px;padding:2px 6px;border-radius:4px;border:none;background:#2e7d32;color:#fff;
+    font:bold 11px Arial,sans-serif;cursor:pointer;vertical-align:middle}
+  .nova-pxmsg{margin-left:4px;font:bold 11px Arial,sans-serif;color:#2e7d32;vertical-align:middle}
   #eht-prof{margin:6px 0;padding:6px 10px;border-radius:5px;color:#000;font:bold 13px Arial,sans-serif}
   #eht-panel .ffcol{display:flex;gap:6px;align-items:center}
   .eht-cd{font-family:monospace!important;font-weight:bold!important;color:#ff6b6b!important}
@@ -606,6 +609,78 @@
   }, 5000);
   loadBars();
 
+  // ---------- 💲 item market price helper ----------
+  // On the Item Market / Bazaar "add" pages, adds a "−$1" button next to each
+  // price box. Tap it → fills in $1 below the cheapest Item Market listing.
+  // It only types the price; you still press Torn's list/add button yourself.
+  const UNDERCUT = 1;
+  const priceCache = {};   // itemId -> {low, t}
+
+  async function lowestPrice(itemId) {
+    const c = priceCache[itemId];
+    if (c && Date.now() - c.t < 60000) return c.low;
+    const j = await api(`v2/market/${itemId}/itemmarket`);
+    const ls = j.itemmarket?.listings || [];
+    const low = ls.length ? Math.min(...ls.map(l => l.price ?? l.cost)) : null;
+    priceCache[itemId] = { low, t: Date.now() };
+    return low;
+  }
+
+  // React-friendly way to type into an input
+  function typeValue(input, v) {
+    const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+    set.call(input, String(v));
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+  }
+
+  // The item's picture URL contains its ID: /images/items/123/large.png
+  function findItemId(input) {
+    for (let el = input; el && el !== document.body; el = el.parentElement) {
+      const img = el.querySelector('img[src*="/items/"]');
+      if (img) { const m = img.src.match(/\/items\/(\d+)\//); if (m) return m[1]; }
+    }
+    return null;
+  }
+
+  function addPriceButtons() {
+    const onMarket = location.href.includes('sid=ItemMarket') || location.pathname.includes('bazaar.php');
+    if (!onMarket) return;
+    const inputs = document.querySelectorAll(
+      'input.input-money, input[placeholder*="rice" i], input[aria-label*="price" i], input[class*="price" i], input[name*="price" i]');
+    for (const input of inputs) {
+      if (input.type === 'hidden' || input.dataset.novaPx || input.closest('#eht-panel, #eht-card')) continue;
+      const itemId = findItemId(input);
+      if (!itemId) continue;
+      input.dataset.novaPx = '1';
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'nova-px';
+      b.textContent = `−$${UNDERCUT}`;
+      const msg = document.createElement('span');
+      msg.className = 'nova-pxmsg';
+      b.onclick = async (ev) => {
+        ev.preventDefault(); ev.stopPropagation();
+        msg.textContent = '…';
+        try {
+          const low = await lowestPrice(itemId);
+          if (low == null) { msg.textContent = 'no listings'; return; }
+          const price = Math.max(low - UNDERCUT, 1);
+          // fill this box, plus the hidden twin Torn keeps for money inputs
+          const group = input.closest('.input-money-group');
+          const boxes = group ? group.querySelectorAll('input') : [input];
+          boxes.forEach(x => typeValue(x, price));
+          msg.textContent = `low $${low.toLocaleString()}`;
+        } catch (e) {
+          msg.textContent = '⚠️ ' + (e.message || e);
+        }
+      };
+      const anchor = input.closest('.input-money-group') || input;
+      anchor.after(b, msg);
+    }
+  }
+
   // ---------- loops ----------
   setInterval(() => {
     checkAlerts();
@@ -613,6 +688,7 @@
     if (document.hidden) return;
     renderPanel();
     decorateRows();
+    addPriceButtons();
     if (panel.style.display === 'block') {
       const miss = enemyList.map(m => m.id).filter(id => !ffGet(id));
       if (miss.length) ffFetch(miss);

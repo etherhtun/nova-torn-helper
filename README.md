@@ -36,3 +36,7 @@ When the script changes, raise `@version` — then PDA's **Check for Update** / 
 - ⛓️ **Chain alert:** beeps when your faction chain timer drops to 60s and again at 30s (chains of 10+).
 - ⚡ **Energy full alert:** beeps once when your energy bar is full.
 - Turn all alerts on/off with the 🔔 button in the 🏥 panel. Alerts only work while Torn is open.
+
+### 5. Item Market price helper (Item Market / Bazaar add pages)
+- A green **−$1** button next to each price box. Tap it → fills in $1 below the cheapest Item Market listing and shows the lowest price.
+- It only types the price — you check it and press Torn's list/add button yourself.
