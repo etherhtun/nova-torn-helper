@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      2.7
+// @version      2.8
 // @description  All-in-one: ✅ war targets, ✈️ travel helper, 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain timer + repeating chain alarm, ⚡ energy alert, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
@@ -93,7 +93,7 @@ document.documentElement.dataset.novaTornHelper = '1';
   @keyframes eht-pulse{to{background:#ffd700;transform:scale(1.15)}}
   #eht-toast{position:fixed;right:10px;bottom:145px;z-index:99999;background:#ffd700;color:#000;
     font:bold 12px Arial,sans-serif;padding:6px 10px;border-radius:6px;box-shadow:0 2px 6px #0008;display:none}
-  .eht-ff{display:inline-block;margin-left:3px;padding:1px 4px;border-radius:3px;font:bold 11px Arial,sans-serif;
+  .eht-ff{cursor:pointer;display:inline-block;margin-left:3px;padding:1px 4px;border-radius:3px;font:bold 11px Arial,sans-serif;
     color:#000;vertical-align:middle;line-height:14px;white-space:nowrap}
   #eht-tbtn{position:fixed;right:60px;bottom:90px;z-index:99999;width:44px;height:44px;border-radius:50%;
     background:#2e7d32;color:#fff;font-size:22px;border:none;box-shadow:0 2px 6px #0008;}
@@ -508,11 +508,31 @@ document.documentElement.dataset.novaTornHelper = '1';
     return '#ef4444';
   }
 
+  // What badges show; tap/click any badge to switch: Both → Stats → FF
+  const FF_MODES = { both: 'FF + est. stats', stats: 'est. stats', ff: 'FF' };
+  let ffMode = LS.get('ffmode', 'both');
+  if (!FF_MODES[ffMode]) ffMode = 'both';
+  document.addEventListener('click', (ev) => {
+    const b = ev.target.closest && ev.target.closest('.eht-ff');
+    if (!b || b.closest('#eht-card')) return;
+    ev.preventDefault(); ev.stopPropagation();
+    const keys = Object.keys(FF_MODES);
+    ffMode = keys[(keys.indexOf(ffMode) + 1) % keys.length];
+    LS.set('ffmode', ffMode);
+    listSig = '';                                   // redraw the 🏥 panel too
+    toast.textContent = `Badges now show: ${FF_MODES[ffMode]}  (tap a badge to switch)`;
+    toast.style.display = 'block';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toast.style.display = 'none'; }, 3000);
+  }, true);
+
   function ffBadge(id) {
     const e = ffGet(id);
     if (!e) return ffError ? { text: '!', bg: '#c0392b', title: ffError } : { text: '…', bg: '#666', title: 'Loading FF' };
     if (e.ff == null) return { text: '?', bg: '#666', title: 'No FF estimate' };
-    return { text: Number(e.ff).toFixed(2), bg: ffColor(e.ff), title: `FF ${e.ff}  ·  est. stats ${e.bs ?? '?'}` };
+    const ff = Number(e.ff).toFixed(2), bs = e.bs ?? '?';
+    const text = ffMode === 'ff' ? ff : ffMode === 'stats' ? bs : `${ff} · ${bs}`;
+    return { text, bg: ffColor(e.ff), title: `FF ${ff}  ·  est. stats ${bs}  (tap to switch)` };
   }
 
   // ---------- inline timers + FF in the member list ----------
