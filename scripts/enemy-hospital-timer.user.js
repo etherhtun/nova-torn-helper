@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Enemy Hospital Timer + FF
 // @namespace    torn-enemy-hosp
-// @version      1.2
-// @description  Hospital countdowns in the faction/war Status column, FF (Fair Fight) badges from FFScouter, and a 🏥 panel. Read-only.
+// @version      1.3
+// @description  Hospital countdowns in the faction/war Status column, FF (Fair Fight) badges from FFScouter, a 🏥 panel with sort/filter, attack links and leave-hospital alerts. Read-only.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
 // @connect      ffscouter.com
@@ -19,6 +19,8 @@
   const PDA_KEY = '###PDA-APIKEY###';
   const REFRESH_SEC = 30;      // API refresh interval
   const SOON_SEC = 120;        // highlight when leaving within this many seconds
+  const ALERT_SEC = 20;        // alert this many seconds before an enemy leaves hospital
+  const FILTER_SEC = 300;      // "≤5 min" filter
 
   const LS = {
     get: (k, d) => { try { return localStorage.getItem('ehtimer_' + k) ?? d; } catch { return d; } },
@@ -32,6 +34,11 @@
   let warFactionIds = null;  // [idA, idB] when in a ranked war
   let lastFetch = 0;
   let lastError = '';
+
+  // panel settings (remembered)
+  let sortBy = LS.get('sort', 'time');          // 'time' | 'ff'
+  let soonOnly = LS.get('soon', '0') === '1';
+  let alertOn = LS.get('alert', '1') === '1';
 
   // ---------- styles ----------
   const style = document.createElement('style');
@@ -50,6 +57,13 @@
   #eht-panel .out{background:#123d1a}
   #eht-panel .t{font-family:monospace;font-weight:bold}
   #eht-panel .msg{padding:8px;color:#aaa}
+  #eht-panel .bar{display:flex;gap:6px;padding:4px 8px;background:#252525;border-bottom:1px solid #333}
+  #eht-panel .bar button{flex:1}
+  #eht-panel .atk{font-size:15px;text-decoration:none}
+  #eht-btn.eht-ring{animation:eht-pulse .5s infinite alternate}
+  @keyframes eht-pulse{to{background:#ffd700;transform:scale(1.15)}}
+  #eht-toast{position:fixed;right:60px;bottom:95px;z-index:99999;background:#ffd700;color:#000;
+    font:bold 12px Arial,sans-serif;padding:6px 10px;border-radius:6px;box-shadow:0 2px 6px #0008;display:none}
   .eht-ff{display:inline-block;margin-left:3px;padding:1px 4px;border-radius:3px;font:bold 11px Arial,sans-serif;
     color:#000;vertical-align:middle;line-height:14px;white-space:nowrap}
   #eht-panel .ffcol{display:flex;gap:6px;align-items:center}
@@ -64,13 +78,56 @@
   btn.textContent = '🏥';
   const panel = document.createElement('div');
   panel.id = 'eht-panel';
-  document.body.append(btn, panel);
+  const toast = document.createElement('div');
+  toast.id = 'eht-toast';
+  document.body.append(btn, panel, toast);
 
   btn.onclick = () => {
+    unlockSound();
+    btn.classList.remove('eht-ring');
     const open = panel.style.display === 'block';
     panel.style.display = open ? 'none' : 'block';
     if (!open) { renderPanel(); refresh(true); }
   };
+
+  // ---------- alerts ----------
+  let actx = null;
+  function unlockSound() {
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state === 'suspended') actx.resume();
+    } catch {}
+  }
+  function beep() {
+    try {
+      unlockSound();
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.frequency.value = 880;
+      g.gain.value = 0.2;
+      o.connect(g); g.connect(actx.destination);
+      o.start(); o.stop(actx.currentTime + 0.3);
+    } catch {}
+  }
+  let toastTimer = 0;
+  function ring(m, left) {
+    beep();
+    try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch {}
+    btn.classList.add('eht-ring');
+    toast.textContent = `🔔 ${m.name} leaves hospital in ${left}s`;
+    toast.style.display = 'block';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toast.style.display = 'none'; btn.classList.remove('eht-ring'); }, 6000);
+  }
+  const alerted = new Set();
+  function checkAlerts() {
+    if (!alertOn) return;
+    const now = Math.floor(Date.now() / 1000);
+    for (const m of enemyList) {
+      const left = m.until - now;
+      if (left > ALERT_SEC) alerted.delete(m.id);
+      else if (left > 0 && !alerted.has(m.id)) { alerted.add(m.id); ring(m, left); }
+    }
+  }
 
   function fmt(sec) {
     if (sec <= 0) return 'OUT';
@@ -78,42 +135,86 @@
     return (h ? h + ':' : '') + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
   }
 
-  function renderPanel() {
-    if (panel.style.display !== 'block') return;
-    const now = Math.floor(Date.now() / 1000);
-    let body;
-    if (lastError) body = `<div class="msg">⚠️ ${lastError}</div>`;
-    else if (ffError && !enemyList.length) body = `<div class="msg">⚠️ ${ffError}</div>`;
-    else if (!enemyFactionId()) body = `<div class="msg">Enter the enemy faction ID (auto-detected during a ranked war).</div>`;
-    else if (!enemyList.length) body = `<div class="msg">No enemy in hospital right now.</div>`;
-    else {
-      body = enemyList.map(m => {
-        const left = m.until - now;
-        const cls = left <= 0 ? 'out' : left <= SOON_SEC ? 'soon' : '';
-        return `<div class="row ${cls}">
-          <a href="https://www.torn.com/profiles.php?XID=${m.id}">${m.name} [${m.level}]</a>
-          <span class="ffcol"><span class="eht-ff" style="background:${ffBadge(m.id).bg}">${ffBadge(m.id).text}</span>
-          <span class="t">${fmt(left)}</span></span></div>`;
-      }).join('');
-      if (ffError) body += `<div class="msg">⚠️ ${ffError}</div>`;
-      body += `<div class="msg">${enemyList.length} in hospital · updated ${Math.max(0, now - Math.floor(lastFetch / 1000))}s ago</div>`;
-    }
-    if (document.activeElement && panel.contains(document.activeElement)) {
-      const list = panel.querySelector('#eht-list');
-      if (list) list.innerHTML = body;
-      return;
-    }
+  // The panel is built once; after that only the list changes, and the
+  // countdowns are updated in place so taps on links/buttons aren't lost.
+  let shellKey = '';
+  let listSig = '';
+
+  function buildShell() {
     panel.innerHTML = `<header>
         ${getKey() ? '' : '<input id="eht-key" placeholder="API key">'}
         <input id="eht-fid" placeholder="Enemy faction ID" value="${LS.get('fid', '')}">
         <button id="eht-go">Load</button>
-      </header><div id="eht-list">${body}</div>`;
-    panel.querySelector('#eht-go').onclick = () => {
-      const k = panel.querySelector('#eht-key');
+      </header>
+      <div class="bar">
+        <button id="eht-sort"></button><button id="eht-soon"></button><button id="eht-alert"></button>
+      </div>
+      <div id="eht-list"></div>`;
+    const q = s => panel.querySelector(s);
+    q('#eht-go').onclick = () => {
+      const k = q('#eht-key');
       if (k && k.value.trim()) LS.set('key', k.value.trim());
-      LS.set('fid', panel.querySelector('#eht-fid').value.trim());
+      LS.set('fid', q('#eht-fid').value.trim());
       refresh(true);
     };
+    q('#eht-sort').onclick = () => { sortBy = sortBy === 'time' ? 'ff' : 'time'; LS.set('sort', sortBy); renderPanel(); };
+    q('#eht-soon').onclick = () => { soonOnly = !soonOnly; LS.set('soon', soonOnly ? '1' : '0'); renderPanel(); };
+    q('#eht-alert').onclick = () => { alertOn = !alertOn; LS.set('alert', alertOn ? '1' : '0'); unlockSound(); renderPanel(); };
+  }
+
+  function renderPanel() {
+    if (panel.style.display !== 'block') return;
+    const sk = getKey() ? 'key' : 'nokey';
+    if (shellKey !== sk) { buildShell(); shellKey = sk; listSig = ''; }
+    const q = s => panel.querySelector(s);
+    q('#eht-sort').textContent = sortBy === 'time' ? 'Sort: Time' : 'Sort: FF';
+    q('#eht-soon').textContent = soonOnly ? '≤5 min ✓' : 'All';
+    q('#eht-alert').textContent = alertOn ? '🔔 On' : '🔕 Off';
+
+    const now = Math.floor(Date.now() / 1000);
+    let rows = enemyList.slice();
+    if (soonOnly) rows = rows.filter(m => m.until - now <= FILTER_SEC);
+    if (sortBy === 'ff') rows.sort((a, b) => (ffGet(b.id)?.ff ?? -1) - (ffGet(a.id)?.ff ?? -1));
+
+    let msg = '';
+    if (lastError) msg = lastError;
+    else if (ffError && !enemyList.length) msg = ffError;
+    else if (!enemyFactionId()) msg = 'Enter the enemy faction ID (auto-detected during a ranked war).';
+    else if (!enemyList.length) msg = 'No enemy in hospital right now.';
+    else if (!rows.length) msg = 'Nobody leaving within 5 min.';
+
+    // rebuild the list only when what's shown actually changes
+    const sig = msg ? 'msg:' + msg : rows.map(m => m.id + ':' + ffBadge(m.id).text).join(',') + '|' + ffError;
+    const list = q('#eht-list');
+    if (sig !== listSig) {
+      listSig = sig;
+      if (msg) list.innerHTML = `<div class="msg">${msg.startsWith('No') || msg.startsWith('Nobody') || msg.startsWith('Enter') ? '' : '⚠️ '}${msg}</div>`;
+      else {
+        list.innerHTML = rows.map(m => {
+          const b = ffBadge(m.id);
+          return `<div class="row" data-id="${m.id}">
+            <a href="https://www.torn.com/profiles.php?XID=${m.id}">${m.name} [${m.level}]</a>
+            <span class="ffcol"><span class="eht-ff" style="background:${b.bg}" title="${b.title}">${b.text}</span>
+            <span class="t"></span>
+            <a class="atk" href="https://www.torn.com/loader.php?sid=attack&user2ID=${m.id}" title="Attack">⚔️</a></span></div>`;
+        }).join('')
+          + (ffError ? `<div class="msg">⚠️ ${ffError}</div>` : '')
+          + `<div class="msg" id="eht-foot"></div>`;
+      }
+    }
+    if (msg) return;
+
+    // every second: update countdowns and colours in place
+    for (const m of rows) {
+      const row = list.querySelector(`.row[data-id="${m.id}"]`);
+      if (!row) continue;
+      const left = m.until - now;
+      row.classList.toggle('out', left <= 0);
+      row.classList.toggle('soon', left > 0 && left <= SOON_SEC);
+      row.querySelector('.t').textContent = fmt(left);
+    }
+    const foot = q('#eht-foot');
+    if (foot) foot.textContent = `${rows.length} in hospital · updated ${Math.max(0, now - Math.floor(lastFetch / 1000))}s ago`;
   }
 
   // ---------- API ----------
@@ -330,6 +431,8 @@
 
   // ---------- loops ----------
   setInterval(() => {
+    checkAlerts();
+    if (document.hidden) return;
     renderPanel();
     decorateRows();
     if (panel.style.display === 'block') {
@@ -338,6 +441,7 @@
     }
   }, 1000);
   setInterval(() => {
+    if (document.hidden) return;   // save API calls while Torn isn't on screen
     if (location.pathname.includes('factions.php') || panel.style.display === 'block') refresh();
   }, 5000);
   if (location.pathname.includes('factions.php')) refresh(true);
