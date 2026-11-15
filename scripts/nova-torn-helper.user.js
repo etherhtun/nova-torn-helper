@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      1.1
-// @description  All-in-one: enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
+// @version      1.2
+// @description  All-in-one: 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
 // @connect      ffscouter.com
@@ -65,10 +65,24 @@
   #eht-panel .atk{font-size:15px;text-decoration:none}
   #eht-btn.eht-ring{animation:eht-pulse .5s infinite alternate}
   @keyframes eht-pulse{to{background:#ffd700;transform:scale(1.15)}}
-  #eht-toast{position:fixed;right:60px;bottom:95px;z-index:99999;background:#ffd700;color:#000;
+  #eht-toast{position:fixed;right:10px;bottom:145px;z-index:99999;background:#ffd700;color:#000;
     font:bold 12px Arial,sans-serif;padding:6px 10px;border-radius:6px;box-shadow:0 2px 6px #0008;display:none}
   .eht-ff{display:inline-block;margin-left:3px;padding:1px 4px;border-radius:3px;font:bold 11px Arial,sans-serif;
     color:#000;vertical-align:middle;line-height:14px;white-space:nowrap}
+  #eht-tbtn{position:fixed;right:60px;bottom:90px;z-index:99999;width:44px;height:44px;border-radius:50%;
+    background:#2e7d32;color:#fff;font-size:22px;border:none;box-shadow:0 2px 6px #0008;}
+  #eht-card{position:fixed;right:10px;bottom:140px;z-index:99999;width:270px;background:#1e1e1e;color:#ddd;
+    font:12px Arial,sans-serif;border:1px solid #444;border-radius:8px;box-shadow:0 4px 12px #000a;display:none}
+  #eht-card header{background:#2b2b2b;padding:6px 8px;display:flex;gap:4px;align-items:center;border-radius:8px 8px 0 0}
+  #eht-card input[type=number]{width:44px;background:#111;color:#eee;border:1px solid #555;border-radius:4px;padding:2px}
+  #eht-card .tb{padding:10px 8px;min-height:44px;line-height:18px}
+  #eht-card .tb a{color:#8cf;font-weight:bold;font-size:14px;text-decoration:none}
+  #eht-card .btns{display:flex;gap:6px;padding:0 8px 8px}
+  #eht-card .btns a,#eht-card .btns button{flex:1;text-align:center;padding:8px 0;border-radius:5px;font:bold 13px Arial,sans-serif;
+    text-decoration:none;border:none}
+  #eht-card #eht-atk{background:#c0392b;color:#fff}
+  #eht-card #eht-atk.off{opacity:.35;pointer-events:none}
+  #eht-card #eht-next{background:#444;color:#eee}
   #eht-prof{margin:6px 0;padding:6px 10px;border-radius:5px;color:#000;font:bold 13px Arial,sans-serif}
   #eht-panel .ffcol{display:flex;gap:6px;align-items:center}
   .eht-cd{font-family:monospace!important;font-weight:bold!important;color:#ff6b6b!important}
@@ -91,7 +105,7 @@
     btn.classList.remove('eht-ring');
     const open = panel.style.display === 'block';
     panel.style.display = open ? 'none' : 'block';
-    if (!open) { renderPanel(); refresh(true); }
+    if (!open) { card.style.display = 'none'; renderPanel(); refresh(true); }
   };
 
   // ---------- alerts ----------
@@ -462,6 +476,87 @@
     if (box.textContent !== txt) box.textContent = txt;
     box.style.background = b.bg;
   }
+
+  // ---------- 🎯 target finder (outside hits) ----------
+  // Asks FFScouter for players in your FF range, then checks with the Torn API
+  // that the player is out of hospital/jail/travel before showing them.
+  const tbtn = document.createElement('button');
+  tbtn.id = 'eht-tbtn';
+  tbtn.textContent = '🎯';
+  const card = document.createElement('div');
+  card.id = 'eht-card';
+  card.innerHTML = `<header>FF <input type="number" id="eht-min" step="0.1"> – <input type="number" id="eht-max" step="0.1">
+      <label style="margin-left:auto"><input type="checkbox" id="eht-inact"> inactive</label></header>
+    <div class="tb" id="eht-tb"></div>
+    <div class="btns"><a id="eht-atk" class="off" href="#">⚔️ Attack</a><button id="eht-next">Next ▶</button></div>`;
+  document.body.append(tbtn, card);
+  const cq = s => card.querySelector(s);
+  cq('#eht-min').value = LS.get('tmin', '2');
+  cq('#eht-max').value = LS.get('tmax', '3');
+  cq('#eht-inact').checked = LS.get('tinact', '1') === '1';
+  const saveT = () => {
+    LS.set('tmin', cq('#eht-min').value); LS.set('tmax', cq('#eht-max').value);
+    LS.set('tinact', cq('#eht-inact').checked ? '1' : '0');
+    pool = [];                                   // new settings → new search
+  };
+  cq('#eht-min').onchange = cq('#eht-max').onchange = cq('#eht-inact').onchange = saveT;
+
+  let pool = [], poolT = 0, tBusy = false;
+  const setTB = html => { cq('#eht-tb').innerHTML = html; };
+
+  async function loadPool() {
+    const key = getKey();
+    if (!key) throw new Error('Enter your API key in the 🏥 panel first.');
+    const url = `https://ffscouter.com/api/v1/get-targets?key=${key}`
+      + `&minff=${cq('#eht-min').value}&maxff=${cq('#eht-max').value}`
+      + `&inactiveonly=${cq('#eht-inact').checked ? 1 : 0}&limit=50`;
+    const j = JSON.parse(await httpGet(url));
+    const arr = Array.isArray(j) ? j : (j && (j.targets || j.data)) || [];
+    if (!arr.length && j && (j.error || j.message)) throw new Error('FFScouter: ' + (j.error || j.message));
+    pool = arr.map(t => ({
+      id: String(t.player_id ?? t.id),
+      ff: t.fair_fight ?? t.ff,
+      bs: t.bs_estimate_human ?? '?',
+    })).filter(t => t.id && t.id !== 'undefined' && t.id !== ownId);
+    poolT = Date.now();
+  }
+
+  async function findTarget() {
+    if (tBusy) return;
+    tBusy = true;
+    cq('#eht-atk').classList.add('off');
+    setTB('🔎 Searching…');
+    try {
+      for (let tries = 0; tries < 8; tries++) {
+        if (!pool.length || Date.now() - poolT > 10 * 60 * 1000) await loadPool();
+        if (!pool.length) throw new Error('No players in this FF range. Try a wider range.');
+        const t = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
+        const p = await api(`user/${t.id}?selections=profile`);
+        if (p.status?.state !== 'Okay') continue;     // in hospital / jail / travelling → skip
+        ffCache[t.id] = { ff: t.ff, bs: t.bs, t: Date.now() };
+        const ff = t.ff != null ? Number(t.ff).toFixed(2) : '?';
+        setTB(`<a href="https://www.torn.com/profiles.php?XID=${t.id}">${p.name} [${p.level}]</a>
+          <span class="eht-ff" style="background:${t.ff != null ? ffColor(t.ff) : '#666'}">${ff}</span><br>
+          est. stats ${t.bs} · last active ${p.last_action?.relative ?? '?'}`);
+        const atk = cq('#eht-atk');
+        atk.href = `https://www.torn.com/loader.php?sid=attack&user2ID=${t.id}`;
+        atk.classList.remove('off');
+        return;
+      }
+      setTB('Everyone checked was busy — press Next ▶');
+    } catch (e) {
+      setTB('⚠️ ' + (e.message || e));
+    } finally {
+      tBusy = false;
+    }
+  }
+
+  tbtn.onclick = () => {
+    const open = card.style.display === 'block';
+    card.style.display = open ? 'none' : 'block';
+    if (!open) { panel.style.display = 'none'; findTarget(); }
+  };
+  cq('#eht-next').onclick = findTarget;
 
   // ---------- loops ----------
   setInterval(() => {

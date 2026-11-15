@@ -22,6 +22,8 @@ When the script changes, raise `@version` — then PDA's **Check for Update** / 
 - On a player's profile: a big "Fair Fight: 2.70 · est. stats 1.2b" line at the top.
 - Data from [FFScouter](https://ffscouter.com) — register your API key there once, or badges show `?`.
 
+- 🎯 **Target finder** (green button): finds a player in your FF range (default 2.0–3.0, inactive only) who is out of hospital/jail/travel, with an ⚔️ Attack button. **Next ▶** gives another one. You press attack yourself.
+
 ### 2. Enemy hospital timer (faction and war pages)
 - Hospital countdowns in the Status column.
 - 🏥 panel: sort by time or FF, "≤5 min" filter, ⚔️ attack link, and a 🔔 alert 20s before an enemy leaves hospital.
