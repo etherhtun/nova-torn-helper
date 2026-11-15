@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      2.4
+// @version      2.5
 // @description  All-in-one: 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain timer + repeating chain alarm, ⚡ energy alert, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
@@ -671,9 +671,21 @@ document.documentElement.dataset.novaTornHelper = '1';
     toastTimer = setTimeout(() => { toast.style.display = 'none'; }, 3000);
   };
 
+  let barsDenied = false;
   async function loadBars() {
-    if (!getKey()) return;
-    try { bars = await api('user/?selections=bars'); barsT = Date.now(); } catch {}
+    if (!getKey() || barsDenied) return;
+    try { bars = await api('user/?selections=bars'); barsT = Date.now(); }
+    catch (e) {
+      // error 16 = key level too low (Public key) → tell the user once, stop asking
+      if (/error 16\b/.test(e.message)) {
+        barsDenied = true;
+        toast.textContent = '🔑 Chain & energy alerts need a LIMITED API key. Yours is Public — '
+          + (PDA_KEY.includes('PDA-APIKEY') ? 'Tampermonkey menu → 🔑 Set API key.' : 'change it in PDA settings.');
+        toast.style.display = 'block';
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => { toast.style.display = 'none'; }, 12000);
+      }
+    }
   }
   const chainActive = () => bars?.chain && bars.chain.current >= 10 && bars.chain.timeout > 0;
   const chainLeft = () => bars.chain.timeout - Math.floor((Date.now() - barsT) / 1000);
