@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      2.0
+// @version      2.1
 // @description  All-in-one: 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain + ⚡ energy alerts, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
@@ -146,7 +146,12 @@ document.documentElement.dataset.novaTornHelper = '1';
       if (actx.state === 'suspended') actx.resume();
     } catch {}
   }
+  // Browsers only allow sound/vibration after you've tapped or clicked the page once.
+  const touched = () => !!(navigator.userActivation && navigator.userActivation.hasBeenActive);
+  ['pointerdown', 'keydown'].forEach(ev =>
+    document.addEventListener(ev, unlockSound, { once: true, capture: true }));
   function beep() {
+    if (!actx && !touched()) return;      // not allowed yet → stay quiet (toast still shows)
     try {
       unlockSound();
       const o = actx.createOscillator(), g = actx.createGain();
@@ -160,7 +165,7 @@ document.documentElement.dataset.novaTornHelper = '1';
   function ring(m, left) { notify(`🔔 ${m.name} leaves hospital in ${left}s`); }
   function notify(text) {
     beep();
-    try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch {}
+    try { if (touched() && navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch {}
     btn.classList.add('eht-ring');
     toast.textContent = text;
     toast.style.display = 'block';
