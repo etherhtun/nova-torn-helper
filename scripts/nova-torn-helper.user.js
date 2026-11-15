@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      1.6
+// @version      1.7
 // @description  All-in-one: 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain + ⚡ energy alerts, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
@@ -302,11 +302,11 @@
 
   // ---------- where is everyone? (Abroad / Traveling) ----------
   const COUNTRIES = [
-    ['Mexic', '🇲🇽', 'Mexico'], ['Cayman', '🇰🇾', 'Cayman'], ['Canad', '🇨🇦', 'Canada'],
-    ['Hawai', '🇺🇸', 'Hawaii'], ['United Kingdom', '🇬🇧', 'UK'], ['British', '🇬🇧', 'UK'],
-    ['Argentin', '🇦🇷', 'Argentina'], ['Switzerland', '🇨🇭', 'Swiss'], ['Swiss', '🇨🇭', 'Swiss'],
-    ['Japan', '🇯🇵', 'Japan'], ['Chin', '🇨🇳', 'China'], ['UAE', '🇦🇪', 'UAE'], ['Emirat', '🇦🇪', 'UAE'],
-    ['South Africa', '🇿🇦', 'S.Africa'],
+    ['Mexic', '🇲🇽', 'MEX'], ['Cayman', '🇰🇾', 'CAY'], ['Canad', '🇨🇦', 'CAN'],
+    ['Hawai', '🇺🇸', 'HAW'], ['United Kingdom', '🇬🇧', 'UK'], ['British', '🇬🇧', 'UK'],
+    ['Argentin', '🇦🇷', 'ARG'], ['Switzerland', '🇨🇭', 'SWI'], ['Swiss', '🇨🇭', 'SWI'],
+    ['Japan', '🇯🇵', 'JPN'], ['Chin', '🇨🇳', 'CHN'], ['UAE', '🇦🇪', 'UAE'], ['Emirat', '🇦🇪', 'UAE'],
+    ['South Africa', '🇿🇦', 'SA'],
   ];
   // "In Japan" → 🇯🇵 Japan · "Traveling to Japan" → ✈ 🇯🇵 Japan · "Returning to Torn from Japan" → 🇯🇵 ✈ Torn
   function where(st) {
