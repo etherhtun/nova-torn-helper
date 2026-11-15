@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      1.8
+// @version      1.9
 // @description  All-in-one: 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain + ⚡ energy alerts, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
@@ -11,6 +11,12 @@
 // @downloadURL  https://raw.githubusercontent.com/etherhtun/nova-torn-helper/main/scripts/nova-torn-helper.user.js
 // @updateURL    https://raw.githubusercontent.com/etherhtun/nova-torn-helper/main/scripts/nova-torn-helper.user.js
 // ==/UserScript==
+
+// If this script is loaded twice (e.g. added twice in PDA), only the first copy runs.
+if (document.documentElement.dataset.novaTornHelper) {
+  console.warn('Nova Torn Helper is installed more than once - remove the extra copy.');
+} else {
+document.documentElement.dataset.novaTornHelper = '1';
 
 // ===================== Part 1: Enemy Hospital Timer + FF =====================
 
@@ -824,3 +830,4 @@
   // The Stock tab is loaded on demand, so keep checking for it.
   if (location.pathname.includes('companies.php')) setInterval(addButton, 1000);
 })();
+} // end of 'only run once'
