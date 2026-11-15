@@ -11,7 +11,7 @@ Hospital countdowns in the faction/war Status column, FF (Fair Fight) badges fro
 **Raw link (use this in Torn PDA / Tampermonkey):**
 
 ```
-https://raw.githubusercontent.com/etherhtun/nova-torn-helper/claude/dazzling-bell-3jvncf/scripts/enemy-hospital-timer.user.js
+https://raw.githubusercontent.com/etherhtun/nova-torn-helper/main/scripts/enemy-hospital-timer.user.js
 ```
 
 #### Torn PDA

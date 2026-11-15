@@ -7,8 +7,8 @@
 // @grant        GM_xmlhttpRequest
 // @connect      ffscouter.com
 // @connect      api.torn.com
-// @downloadURL  https://raw.githubusercontent.com/etherhtun/nova-torn-helper/claude/dazzling-bell-3jvncf/scripts/enemy-hospital-timer.user.js
-// @updateURL    https://raw.githubusercontent.com/etherhtun/nova-torn-helper/claude/dazzling-bell-3jvncf/scripts/enemy-hospital-timer.user.js
+// @downloadURL  https://raw.githubusercontent.com/etherhtun/nova-torn-helper/main/scripts/enemy-hospital-timer.user.js
+// @updateURL    https://raw.githubusercontent.com/etherhtun/nova-torn-helper/main/scripts/enemy-hospital-timer.user.js
 // ==/UserScript==
 
 (function () {
