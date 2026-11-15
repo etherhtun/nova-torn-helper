@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      1.0
-// @description  All-in-one: enemy hospital timers + FF badges + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
+// @version      1.1
+// @description  All-in-one: enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
 // @connect      ffscouter.com
@@ -33,6 +33,7 @@
   let hosp = new Map();      // id -> {id,name,level,until}
   let enemyList = [];        // hospital members of the enemy faction (for the panel)
   let ownFactionId = null;
+  let ownId = '';            // your own player ID (no FF badge on yourself)
   let warFactionIds = null;  // [idA, idB] when in a ranked war
   let lastFetch = 0;
   let lastError = '';
@@ -68,6 +69,7 @@
     font:bold 12px Arial,sans-serif;padding:6px 10px;border-radius:6px;box-shadow:0 2px 6px #0008;display:none}
   .eht-ff{display:inline-block;margin-left:3px;padding:1px 4px;border-radius:3px;font:bold 11px Arial,sans-serif;
     color:#000;vertical-align:middle;line-height:14px;white-space:nowrap}
+  #eht-prof{margin:6px 0;padding:6px 10px;border-radius:5px;color:#000;font:bold 13px Arial,sans-serif}
   #eht-panel .ffcol{display:flex;gap:6px;align-items:center}
   .eht-cd{font-family:monospace!important;font-weight:bold!important;color:#ff6b6b!important}
   .eht-cd.eht-soon{color:#ffd700!important}
@@ -235,6 +237,7 @@
     try {
       const j = await api('user/?selections=profile');
       ownFactionId = String(j.faction?.faction_id ?? '');
+      ownId = String(j.player_id ?? '');
     } catch { ownFactionId = ''; }
   }
 
@@ -387,15 +390,20 @@
     return null;
   }
 
+  // FF badge next to player names on every page (like FFScouter);
+  // hospital countdowns only on faction/war pages.
   function decorateRows() {
-    if (!location.pathname.includes('factions.php')) return;
+    const onFaction = location.pathname.includes('factions.php');
     const now = Math.floor(Date.now() / 1000);
     const links = document.querySelectorAll('a[href*="profiles.php?XID="]');
     const seen = new Set();
     const missing = [];
+    profileBox(missing);
     for (const a of links) {
-      if (a.closest('#eht-panel')) continue;
+      if (a.closest('#eht-panel, #chatRoot, [class*="chat-box"], #eht-prof')) continue;
+      if (!a.textContent.trim()) continue;            // skip avatar/image links
       const id = new URL(a.href, location.origin).searchParams.get('XID');
+      if (!id || id === ownId) continue;
       const row = a.closest('li, .table-row, tr');
       if (!row || seen.has(row)) continue;
       seen.add(row);
@@ -413,6 +421,7 @@
       badge.style.background = b.bg;
       badge.title = b.title;
 
+      if (!onFaction) continue;
       const cell = findStatusCell(row);
       if (!cell) continue;
       const m = hosp.get(id);
@@ -431,6 +440,29 @@
     if (missing.length) ffFetch([...new Set(missing)]);
   }
 
+  // Big FF line at the top of a player's profile page
+  function profileBox(missing) {
+    if (!location.pathname.includes('profiles.php')) return;
+    const id = new URL(location.href).searchParams.get('XID');
+    if (!id || id === ownId) return;
+    let box = document.getElementById('eht-prof');
+    if (!box) {
+      const anchor = document.querySelector('.content-title');
+      if (!anchor) return;                              // page not loaded yet
+      box = document.createElement('div');
+      box.id = 'eht-prof';
+      anchor.after(box);
+    }
+    const e = ffGet(id);
+    if (!e) missing.push(id);
+    const b = ffBadge(id);
+    const txt = !e ? 'Fair Fight: loading…'
+      : e.ff == null ? 'Fair Fight: no estimate'
+      : `Fair Fight: ${Number(e.ff).toFixed(2)}  ·  est. stats ${e.bs ?? '?'}`;
+    if (box.textContent !== txt) box.textContent = txt;
+    box.style.background = b.bg;
+  }
+
   // ---------- loops ----------
   setInterval(() => {
     checkAlerts();
@@ -447,6 +479,7 @@
     if (location.pathname.includes('factions.php') || panel.style.display === 'block') refresh();
   }, 5000);
   if (location.pathname.includes('factions.php')) refresh(true);
+  else if (getKey()) loadOwnFaction();
 })();
 
 // ===================== Part 2: Stock Fill (company Stock page) =====================

@@ -17,11 +17,15 @@ When the script changes, raise `@version` — then PDA's **Check for Update** / 
 
 ## What's inside
 
-### 1. Enemy hospital timer + FF (faction and war pages)
+### 1. Fair Fight (every page)
+- FF (Fair Fight) badge next to player names on any Torn page (faction, war, hospital, bounties, …).
+- On a player's profile: a big "Fair Fight: 2.70 · est. stats 1.2b" line at the top.
+- Data from [FFScouter](https://ffscouter.com) — register your API key there once, or badges show `?`.
+
+### 2. Enemy hospital timer (faction and war pages)
 - Hospital countdowns in the Status column.
-- FF (Fair Fight) badges from [FFScouter](https://ffscouter.com) — register your API key there once, or badges show `?`.
 - 🏥 panel: sort by time or FF, "≤5 min" filter, ⚔️ attack link, and a 🔔 alert 20s before an enemy leaves hospital.
 
-### 2. Stock fill (company Stock page)
+### 3. Stock fill (company Stock page)
 - **Fill stock** button fills each order box with that item's share of free storage, by daily sales.
 - It never orders anything — you check the numbers and press Torn's order button yourself.
