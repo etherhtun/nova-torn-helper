@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      3.3
-// @description  All-in-one: ✅ war targets, ✈️ travel helper, 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain timer + repeating chain alarm, ⚡ energy alert, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
+// @version      3.4
+// @description  All-in-one: 💊 drug cooldown alarm, ✅ war targets, ✈️ travel helper, 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain timer + repeating chain alarm, ⚡ energy alert, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_registerMenuCommand
@@ -756,7 +756,7 @@ document.documentElement.dataset.novaTornHelper = '1';
   let barsDenied = false;
   async function loadBars() {
     if (!getKey() || barsDenied) return;
-    try { bars = await api('user/?selections=bars,travel'); barsT = Date.now(); }
+    try { bars = await api('user/?selections=bars,travel,cooldowns'); barsT = Date.now(); }
     catch (e) {
       // error 16 = key level too low (Public key) → tell the user once, stop asking
       if (/error 16\b/.test(e.message)) {
@@ -796,6 +796,7 @@ document.documentElement.dataset.novaTornHelper = '1';
     }
 
     checkTravel();
+    checkDrug();
 
     // ⚡ energy full (once per full bar, remembered across pages)
     const e = bars.energy;
@@ -817,6 +818,24 @@ document.documentElement.dataset.novaTornHelper = '1';
     if (age > every) loadBars();
   }, 1000);
   loadBars();
+
+  // ---------- 💊 drug cooldown alarm ----------
+  // Beeps once when your drug cooldown runs out. The end time is remembered
+  // across pages, so it still fires if the cooldown ends between two checks.
+  function checkDrug() {
+    const cd = bars?.cooldowns;
+    if (cd && cd.drug > 0) {
+      const end = Math.round((barsT / 1000 + cd.drug) / 60) * 60;   // rounded to the minute
+      if (LS.get('drugend', '') !== String(end)) LS.set('drugend', String(end));
+    }
+    const end = +LS.get('drugend', '0');
+    const now = Math.floor(Date.now() / 1000);
+    if (!end || now < end || now - end > 600) return;               // not yet / too long ago
+    if (alertOn && LS.get('drugalerted', '') !== String(end)) {
+      LS.set('drugalerted', String(end));
+      notify('💊 Drug cooldown is over — you can take your next drug!');
+    }
+  }
 
   // ---------- ✈️ travel helper ----------
   // 1) While flying: a landing countdown on every page, and a beep when you land.
