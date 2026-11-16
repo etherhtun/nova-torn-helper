@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      3.4
+// @version      3.5
 // @description  All-in-one: 💊 drug cooldown alarm, ✅ war targets, ✈️ travel helper, 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain timer + repeating chain alarm, ⚡ energy alert, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
@@ -918,6 +918,10 @@ document.documentElement.dataset.novaTornHelper = '1';
           + `<td><b>${money(r.perHour)}</b></td><td>${Math.floor(FLIGHT_MIN[r.cc] / 60)}:${String(FLIGHT_MIN[r.cc] % 60).padStart(2, '0')}</td></tr>`).join('')
         + `</table><div class="nt-note">* carrying ${cap} items, round trip, standard flight times. Stock from YATA (updated ${Math.min(...rows.map(r => r.age))}–${Math.max(...rows.map(r => r.age))} min ago).</div>`
         : 'No profitable items in stock right now.';
+      // colour set on each cell directly: beats any page style (Torn's desktop CSS darkened the text)
+      body.querySelectorAll('th, td, td b').forEach(el => {
+        el.style.setProperty('color', el.tagName === 'B' ? '#5dff7a' : el.tagName === 'TH' ? '#aaa' : '#eee', 'important');
+      });
     } catch (e) {
       body.textContent = '⚠️ Could not load travel data: ' + (e.message || e);
     }
