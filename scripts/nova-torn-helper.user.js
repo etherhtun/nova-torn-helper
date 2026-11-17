@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      3.8
+// @version      3.9
 // @description  All-in-one: 💪 battle stats on the Gym page, 💊 drug cooldown alarm, ✅ war targets, ✈️ travel helper, 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain timer + repeating chain alarm, ⚡ energy alert, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
@@ -862,29 +862,24 @@ document.documentElement.dataset.novaTornHelper = '1';
       keys.forEach(k => { st[k] = raw[k].v; eff[k] = Math.round(raw[k].v * (1 + raw[k].m / 100)); });
       const effTotal = keys.reduce((t, k) => t + eff[k], 0);
 
-      // 📈 gains: remember the last two different snapshots, show what went up since the previous one
-      let snap = {};
-      try { snap = JSON.parse(LS.get('bsnap', '{}')) || {}; } catch {}
+      // 📈 gains since YOUR last 📌 Mark (only moves when you press 📌 Mark)
       const cur = {}; keys.forEach(k => { cur[k] = Math.round(st[k]); });
-      const same = (a, b2) => a && keys.every(k => a[k] === b2[k]);
-      if (!same(snap.last && snap.last.v, cur)) {
-        snap = { prev: snap.last || null, last: { t: Date.now(), v: cur } };
-        LS.set('bsnap', JSON.stringify(snap));
-      }
+      box.dataset.cur = JSON.stringify(cur);
+      let mark = null;
+      try {
+        const old = JSON.parse(LS.get('bsnap', 'null'));
+        mark = old && old.v ? old : old && (old.prev || old.last) ? (old.prev || old.last) : null;   // also reads v3.8's format
+      } catch {}
+      if (!mark) { mark = { t: Date.now(), v: cur }; LS.set('bsnap', JSON.stringify(mark)); }   // first time: start counting now
       const ago = ms => { const h = Math.floor(ms / 3600000), d = Math.floor(h / 24);
         return d >= 1 ? `${d} day${d > 1 ? 's' : ''}` : h >= 1 ? `${h} hour${h > 1 ? 's' : ''}` : `${Math.max(1, Math.round(ms / 60000))} min`; };
-      let gainHtml = '';
-      if (snap.prev) {
-        const ups = keys.map(k => [k, cur[k] - snap.prev.v[k]]).filter(([, d]) => d > 0);
-        const sum = ups.reduce((t, [, d]) => t + d, 0);
-        gainHtml = ups.length
-          ? `<div class="ng-gain">📈 Since last check (${ago(Date.now() - snap.prev.t)} ago): `
-            + ups.map(([k, d]) => `${STAT_NAMES[k]} <b>+${d.toLocaleString()}</b>`).join(' · ')
-            + (ups.length > 1 ? ` · Total <b>+${sum.toLocaleString()}</b>` : '') + '</div>'
-          : '';
-      } else {
-        gainHtml = '<div class="ng-gain">📈 Stats saved — your gains will show here after your next training.</div>';
-      }
+      const ups = keys.map(k => [k, cur[k] - (mark.v[k] || 0)]).filter(([, d]) => d > 0);
+      const sum = ups.reduce((t, [, d]) => t + d, 0);
+      const since = `since your 📌 Mark ${ago(Date.now() - mark.t)} ago`;
+      const gainHtml = '<div class="ng-gain">📈 ' + (ups.length
+        ? `Gained ${since}: ` + ups.map(([k, d]) => `${STAT_NAMES[k]} <b>+${d.toLocaleString()}</b>`).join(' · ')
+          + (ups.length > 1 ? ` · Total <b>+${sum.toLocaleString()}</b>` : '')
+        : `No gains yet ${since}. Train, then tap ↻.`) + '</div>';
       const modTxt = k => { const m = raw[k].m; return m ? `<span class="${m > 0 ? 'ng-up' : 'ng-down'}">(${m > 0 ? '+' : ''}${m}%)</span>` : ''; };
       const total = keys.reduce((t, k) => t + st[k], 0);
       const sorted = keys.slice().sort((a, b) => st[b] - st[a]);
@@ -916,9 +911,16 @@ document.documentElement.dataset.novaTornHelper = '1';
     if (!anchor) return;
     const box = document.createElement('div');
     box.id = 'nova-gym';
-    box.innerHTML = '<div class="ng-head">💪 My battle stats <button class="ng-go">↻</button></div><div class="ng-body"></div>';
+    box.innerHTML = '<div class="ng-head">💪 My battle stats <span><button class="ng-mark" title="Start counting gains from now">📌 Mark</button> '
+      + '<button class="ng-go" title="Reload stats">↻</button></span></div><div class="ng-body"></div>';
     if (anchor.classList.contains('content-title')) anchor.after(box); else anchor.prepend(box);
     box.querySelector('.ng-go').onclick = () => renderGymBox(box);
+    box.querySelector('.ng-mark').onclick = () => {
+      if (!box.dataset.cur) return;
+      if (!confirm('Start counting stat gains from now?')) return;
+      LS.set('bsnap', JSON.stringify({ t: Date.now(), v: JSON.parse(box.dataset.cur) }));
+      renderGymBox(box);
+    };
     renderGymBox(box);
   }
 
