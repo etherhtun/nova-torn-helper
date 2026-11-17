@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      3.6
+// @version      3.7
 // @description  All-in-one: 💪 battle stats on the Gym page, 💊 drug cooldown alarm, ✅ war targets, ✈️ travel helper, 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain timer + repeating chain alarm, ⚡ energy alert, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
@@ -118,6 +118,8 @@ document.documentElement.dataset.novaTornHelper = '1';
   #nova-gym table{border-collapse:collapse;font:13px Arial,sans-serif}
   #nova-gym td{padding:3px 14px 3px 0;white-space:nowrap}
   #nova-gym tr.ng-top td{font-weight:bold!important}
+  #nova-gym tr.ng-hd td{font-size:11px!important}
+  #nova-gym .ng-up,#nova-gym .ng-down{font-size:11px}
   #nova-gym tr.ng-total td{border-top:1px solid #555;font-weight:bold!important}
   #nova-gym .ng-tip{color:#ccc!important;padding-top:6px;line-height:16px}
   #nova-travel{margin:8px 0;background:#1e1e1e;color:#ddd;border:1px solid #444;border-radius:6px;font:12px Arial,sans-serif;overflow-x:auto}
@@ -837,35 +839,44 @@ document.documentElement.dataset.novaTornHelper = '1';
   async function loadBattleStats() {
     let j;
     try { j = await api('v2/user/battlestats'); } catch { j = null; }
+    // each stat → { v: battle value, m: modifier in % (perks, education, faction…) }
     const v2 = j && j.battlestats;
     if (v2 && v2.strength) {
-      const val = x => (typeof x === 'object' ? x.value : x);
-      return { strength: val(v2.strength), defense: val(v2.defense), speed: val(v2.speed), dexterity: val(v2.dexterity) };
+      const one = x => (typeof x === 'object' ? { v: x.value, m: x.modifier || 0 } : { v: x, m: 0 });
+      return { strength: one(v2.strength), defense: one(v2.defense), speed: one(v2.speed), dexterity: one(v2.dexterity) };
     }
     const v1 = await api('user/?selections=battlestats');   // older API as a fallback
     if (v1.strength == null) throw new Error('Torn did not return battle stats');
-    return { strength: v1.strength, defense: v1.defense, speed: v1.speed, dexterity: v1.dexterity };
+    const one = k => ({ v: v1[k], m: v1[k + '_modifier'] || 0 });
+    return { strength: one('strength'), defense: one('defense'), speed: one('speed'), dexterity: one('dexterity') };
   }
 
   async function renderGymBox(box) {
     const body = box.querySelector('.ng-body');
     body.textContent = 'Loading…';
     try {
-      const st = await loadBattleStats();
+      const raw = await loadBattleStats();
       const keys = Object.keys(STAT_NAMES);
+      const st = {}, eff = {};
+      keys.forEach(k => { st[k] = raw[k].v; eff[k] = Math.round(raw[k].v * (1 + raw[k].m / 100)); });
+      const effTotal = keys.reduce((t, k) => t + eff[k], 0);
+      const modTxt = k => { const m = raw[k].m; return m ? `<span class="${m > 0 ? 'ng-up' : 'ng-down'}">(${m > 0 ? '+' : ''}${m}%)</span>` : ''; };
       const total = keys.reduce((t, k) => t + st[k], 0);
       const sorted = keys.slice().sort((a, b) => st[b] - st[a]);
       const top = sorted[0], second = sorted[1];
       const cap = Math.floor(st[top] / 1.25);
       const keeps = st[second] <= cap;
-      body.innerHTML = `<table>${keys.map(k => `<tr${k === top ? ' class="ng-top"' : ''}><td>${STAT_NAMES[k]}</td>
-          <td>${Math.round(st[k]).toLocaleString()}</td><td>${(st[k] / total * 100).toFixed(0)}%</td></tr>`).join('')}
-          <tr class="ng-total"><td>Total</td><td>${Math.round(total).toLocaleString()}</td><td></td></tr></table>
+      body.innerHTML = `<table><tr class="ng-hd"><td></td><td>Battle</td><td>Share</td><td>Effective</td></tr>${keys.map(k => `<tr${k === top ? ' class="ng-top"' : ''}><td>${STAT_NAMES[k]}</td>
+          <td>${Math.round(st[k]).toLocaleString()}</td><td>${(st[k] / total * 100).toFixed(0)}%</td>
+          <td>${eff[k].toLocaleString()} ${modTxt(k)}</td></tr>`).join('')}
+          <tr class="ng-total"><td>Total</td><td>${Math.round(total).toLocaleString()}</td><td></td><td>${effTotal.toLocaleString()}</td></tr></table>
         <div class="ng-tip">${keeps
           ? `🏋️ To keep <b>${SPECIALTY[top]}</b> (${STAT_NAMES[top]} 25% ahead), keep every other stat under <b>${cap.toLocaleString()}</b>.`
             + ` Room left: ${keys.filter(k => k !== top).map(k => `${STAT_NAMES[k]} +${Math.max(0, cap - Math.round(st[k])).toLocaleString()}`).join(' · ')}`
           : `⚠️ ${STAT_NAMES[second]} is within 25% of ${STAT_NAMES[top]}, so ${SPECIALTY[top]} needs ${STAT_NAMES[top]} at ${Math.ceil(st[second] * 1.25).toLocaleString()}.`}</div>`;
-      body.querySelectorAll('td, b').forEach(el => el.style.setProperty('color', el.tagName === 'B' ? '#5dff7a' : '#eee', 'important'));
+      body.querySelectorAll('td, b, .ng-up, .ng-down').forEach(el => el.style.setProperty('color',
+        el.tagName === 'B' ? '#5dff7a' : el.classList.contains('ng-up') ? '#6fcf6f' : el.classList.contains('ng-down') ? '#ff6b6b'
+          : el.closest('.ng-hd') ? '#999' : '#eee', 'important'));
     } catch (e) {
       const msg = e.message || String(e);
       body.textContent = /error (16|2)\b/.test(msg)

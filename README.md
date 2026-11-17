@@ -28,7 +28,7 @@ When the script changes, raise `@version` — then PDA's **Check for Update** / 
 - Switch the panel between **🏥 Hosp** and **✅ Okay**. ✅ Okay lists every enemy you can hit right now (in Torn, not in hospital, not traveling), highest FF first, with 🟢 online / 🟡 idle / ⚫ offline and ⚔️ attack links.
 
 ### 💪 Battle stats (Gym page)
-- A box on the Gym page with your four battle stats, total and share, plus how high your other stats can go while your top stat keeps its 25% lead for its specialty gym (Elites, Gym 3000, Mr. Isoyama's, Total Rebound). Needs a Limited key.
+- A box on the Gym page with your four battle stats, share, effective stats (with each modifier) and totals, plus how high your other stats can go while your top stat keeps its 25% lead for its specialty gym (Elites, Gym 3000, Mr. Isoyama's, Total Rebound). Needs a Limited key.
 
 ### ✈️ Travel helper
 - While flying: a blue ✈️ landing countdown on every page, and a beep when you land.
