@@ -1,6 +1,8 @@
-# nova-torn-helper
+# Nova Torn Helper
 
-One all-in-one userscript for [Torn City](https://www.torn.com), for **Torn PDA** and **Tampermonkey**.
+One all-in-one userscript for [Torn City](https://www.torn.com). Works in **Torn PDA** (phone) and **Tampermonkey** (computer).
+
+It only shows information and fills in boxes — **you press every game action yourself** (attack, order, list), so it stays within Torn's scripting rules.
 
 ## Install
 
@@ -10,45 +12,52 @@ One all-in-one userscript for [Torn City](https://www.torn.com), for **Torn PDA*
 https://raw.githubusercontent.com/etherhtun/nova-torn-helper/main/scripts/nova-torn-helper.user.js
 ```
 
-- **Torn PDA:** Settings → Userscripts → **+** → remote URL → paste the link. Injection time: **End**. PDA fills in your API key automatically.
-- **Tampermonkey:** open the link in your browser and press Install. Enter your API key in the 🏥 panel.
+**Torn PDA (phone)**
+1. Settings → Userscripts → **+** → remote URL → paste the link → save.
+2. Reload Torn. PDA gives the script your API key automatically.
 
-When the script changes, raise `@version` — then PDA's **Check for Update** / Tampermonkey picks it up.
+**Computer (Chrome + Tampermonkey)**
+1. Install the Tampermonkey extension.
+2. `chrome://extensions` → Tampermonkey → Details → turn on **Allow User Scripts**.
+3. Open the link above → **Install**.
+4. Open Torn → click the yellow bar at the top → paste your API key.
 
-## What's inside
+**Before you start**
+- Use a **Limited** API key (Torn → Settings → API Keys). A Public key won't work for the chain, energy, drug and gym features.
+- Register that same key once at [ffscouter.com](https://ffscouter.com), or the FF badges show a red `!`.
+- Updates: PDA → **Check for Update**; Tampermonkey updates by itself about once a day.
 
-### 1. Fair Fight (every page)
-- FF (Fair Fight) badge next to player names on any Torn page (faction, war, hospital, bounties, …).
-- On a player's profile: a big "Fair Fight: 2.70 · est. stats 1.2b" line at the top.
-- Data from [FFScouter](https://ffscouter.com) — register your API key there once, or badges show `?`.
+## Features
 
-- 🎯 **Target finder** (green button): finds a player in your FF range (default 2.0–3.0, inactive only) who is out of hospital/jail/travel, with an ⚔️ Attack button. **Next ▶** gives another one. You press attack yourself.
+### ⚔️ Wars and fighting
+- **FF badges** next to player names on any page: they show the **estimated stats** (like `1.35b`), coloured by Fair Fight — 🔵 easy · 🟢 good · 🟠 hard · 🔴 very hard. Hover for the exact FF.
+- **Profile pages:** a Fair Fight line at the top with FF and estimated stats.
+- **Status column** on faction and war pages: hospital countdowns instead of "Hospital", and the country instead of "Abroad"/"Traveling" (`🇯🇵 JPN`, `✈ 🇲🇽 MEX` flying there, `🇦🇪 ✈ Torn` flying home).
+- **🏥 panel** (red button):
+  - **🏥 Hosp:** enemies in hospital, soonest out first, with a "≤5 min" filter and a 🔔 beep 20s before one gets out.
+  - **✅ Okay:** every enemy you can hit right now, highest FF first, with 🟢 online / 🟡 idle / ⚫ offline.
+  - ⚔️ attack link on every row.
+- **🎯 Target finder** (green button): a player in your FF range who's ready to fight, for outside hits. **Next ▶** for another.
 
-### ✅ War targets (🏥 panel)
-- Switch the panel between **🏥 Hosp** and **✅ Okay**. ✅ Okay lists every enemy you can hit right now (in Torn, not in hospital, not traveling), highest FF first, with 🟢 online / 🟡 idle / ⚫ offline and ⚔️ attack links.
+### ⛓️ Alarms (while Torn is open)
+- **Chain timer + alarm:** while your faction chain (10+) runs, a ⛓️ timer shows on screen. Below the warning time it turns yellow and beeps every 10s; under 30s it flashes red and beeps every 3s — until someone hits. Tap the timer to choose when it starts: 1:00 / 1:30 / 2:00 / 3:00.
+- **💊 Drug cooldown over** · **⚡ Energy full** · **✈️ Landed** — one beep each.
+- Turn all alarms on/off with the 🔔 button in the 🏥 panel. Tap Torn once after opening it so the browser allows sound.
 
-### 💪 Battle stats (Gym page)
-- A box on the Gym page with your four battle stats, share, effective stats (with each modifier) and totals, plus how high your other stats can go while your top stat keeps its 25% lead for its specialty gym (Elites, Gym 3000, Mr. Isoyama's, Total Rebound). Needs a Limited key.
+### 💪 Gym page
+- Your battle stats, share and **effective stats** (with each bonus/penalty).
+- **Gains since your 📌 Mark** — tap 📌 Mark to start counting, train, tap ↻.
+- How high your other stats can go while your top stat keeps its 25% lead for its specialty gym (Elites, Gym 3000, Mr. Isoyama's, Total Rebound).
 
-### ✈️ Travel helper
-- While flying: a blue ✈️ landing countdown on every page, and a beep when you land.
-- On the Travel Agency page: the best item to bring back from each country, ranked by profit per hour for the number of items you can carry (set it in the box). Stock from [YATA](https://yata.yt), values from Torn.
+### ✈️ Travel
+- While flying: a ✈️ landing countdown on every page.
+- On the Travel Agency page: the best item to bring back from each country, ranked by profit per hour for how many items you can carry. Stock from [YATA](https://yata.yt).
 
-### 2. Enemy hospital timer (faction and war pages)
-- Hospital countdowns in the Status column.
-- 🌍 **Where are they?** "Abroad" / "Traveling" in the Status column becomes the country with its flag: `🇯🇵 JPN`, `✈ 🇲🇽 MEX` (flying there), `🇦🇪 ✈ Torn` (flying home). Hospital abroad shows the flag before the timer.
-- 🏥 panel: sort by time or FF, "≤5 min" filter, ⚔️ attack link, and a 🔔 alert 20s before an enemy leaves hospital.
+### 💰 Money
+- **Item Market / Bazaar:** a **−$1** button next to each price box fills in $1 below the cheapest listing.
+- **Company Stock page:** a **Fill stock** button fills each order box by daily sales.
 
-### 3. Stock fill (company Stock page)
-- **Fill stock** button fills each order box with that item's share of free storage, by daily sales.
-- It never orders anything — you check the numbers and press Torn's order button yourself.
-
-### 4. Chain + energy alerts (every page)
-- ⛓️ **Chain timer + alarm:** while your faction chain (10+) runs, a ⛓️ timer shows on screen. Below the warning time it turns yellow and beeps every 10s; under 30s it flashes red and beeps every 3s — until someone hits. Tap the timer to set when the alarm starts: 1:00 / 1:30 / 2:00 / 3:00 (default 1:30).
-- 💊 **Drug cooldown alarm:** beeps once when your drug cooldown is over.
-- ⚡ **Energy full alert:** beeps once when your energy bar is full.
-- Turn all alerts on/off with the 🔔 button in the 🏥 panel. Alerts only work while Torn is open.
-
-### 5. Item Market price helper (Item Market / Bazaar add pages)
-- A green **−$1** button next to each price box. Tap it → fills in $1 below the cheapest Item Market listing and shows the lowest price.
-- It only types the price — you check it and press Torn's list/add button yourself.
+## Good to know
+- Alarms only work while Torn is open on screen (the phone can't beep for a closed app).
+- Your API key stays on your own device. It's only sent to Torn's API and FFScouter (for FF), never anywhere else.
+- The code is all in one file in this repository — anyone can read it.
