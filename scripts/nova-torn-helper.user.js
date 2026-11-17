@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      3.9
+// @version      4.0
 // @description  All-in-one: 💪 battle stats on the Gym page, 💊 drug cooldown alarm, ✅ war targets, ✈️ travel helper, 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain timer + repeating chain alarm, ⚡ energy alert, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
@@ -121,6 +121,7 @@ document.documentElement.dataset.novaTornHelper = '1';
   #nova-gym tr.ng-hd td{font-size:11px!important}
   #nova-gym .ng-up,#nova-gym .ng-down{font-size:11px}
   #nova-gym tr.ng-total td{border-top:1px solid #555;font-weight:bold!important}
+  #nova-gym .ng-report{margin-top:6px;padding:6px 8px;border-radius:5px;background:#1f4d2b;color:#eee!important;line-height:16px}
   #nova-gym .ng-gain{color:#eee!important;padding-top:6px;line-height:16px}
   #nova-gym .ng-tip{color:#ccc!important;padding-top:6px;line-height:16px}
   #nova-travel{margin:8px 0;background:#1e1e1e;color:#ddd;border:1px solid #444;border-radius:6px;font:12px Arial,sans-serif;overflow-x:auto}
@@ -852,7 +853,7 @@ document.documentElement.dataset.novaTornHelper = '1';
     return { strength: one('strength'), defense: one('defense'), speed: one('speed'), dexterity: one('dexterity') };
   }
 
-  async function renderGymBox(box) {
+  async function renderGymBox(box, doCheck = false) {
     const body = box.querySelector('.ng-body');
     body.textContent = 'Loading…';
     try {
@@ -862,24 +863,45 @@ document.documentElement.dataset.novaTornHelper = '1';
       keys.forEach(k => { st[k] = raw[k].v; eff[k] = Math.round(raw[k].v * (1 + raw[k].m / 100)); });
       const effTotal = keys.reduce((t, k) => t + eff[k], 0);
 
-      // 📈 gains since YOUR last 📌 Mark (only moves when you press 📌 Mark)
+      // 📊 manual checks, like Torn Stats: "📊 Check" reports the gains since your
+      // LAST check, then saves now as the new last check.
       const cur = {}; keys.forEach(k => { cur[k] = Math.round(st[k]); });
-      box.dataset.cur = JSON.stringify(cur);
-      let mark = null;
+      let last = null;
       try {
         const old = JSON.parse(LS.get('bsnap', 'null'));
-        mark = old && old.v ? old : old && (old.prev || old.last) ? (old.prev || old.last) : null;   // also reads v3.8's format
+        last = old && old.v ? old : old && (old.prev || old.last) ? (old.prev || old.last) : null;   // older formats too
       } catch {}
-      if (!mark) { mark = { t: Date.now(), v: cur }; LS.set('bsnap', JSON.stringify(mark)); }   // first time: start counting now
       const ago = ms => { const h = Math.floor(ms / 3600000), d = Math.floor(h / 24);
-        return d >= 1 ? `${d} day${d > 1 ? 's' : ''}` : h >= 1 ? `${h} hour${h > 1 ? 's' : ''}` : `${Math.max(1, Math.round(ms / 60000))} min`; };
-      const ups = keys.map(k => [k, cur[k] - (mark.v[k] || 0)]).filter(([, d]) => d > 0);
-      const sum = ups.reduce((t, [, d]) => t + d, 0);
-      const since = `since your 📌 Mark ${ago(Date.now() - mark.t)} ago`;
-      const gainHtml = '<div class="ng-gain">📈 ' + (ups.length
-        ? `Gained ${since}: ` + ups.map(([k, d]) => `${STAT_NAMES[k]} <b>+${d.toLocaleString()}</b>`).join(' · ')
-          + (ups.length > 1 ? ` · Total <b>+${sum.toLocaleString()}</b>` : '')
-        : `No gains yet ${since}. Train, then tap ↻.`) + '</div>';
+        return d >= 1 ? `${d} day${d > 1 ? 's' : ''}` : h >= 1 ? `${h} hour${h > 1 ? 's' : ''}` : ms < 60000 ? 'less than a minute' : `${Math.round(ms / 60000)} min`; };
+      const gainsVs = base => {
+        const ups = keys.map(k => [k, cur[k] - (base.v[k] || 0)]).filter(([, d]) => d > 0);
+        const sum = ups.reduce((t, [, d]) => t + d, 0);
+        return ups.length ? ups.map(([k, d]) => `${STAT_NAMES[k]} <b>+${d.toLocaleString()}</b>`).join(' · ')
+          + (ups.length > 1 ? ` · Total <b>+${sum.toLocaleString()}</b>` : '') : '';
+      };
+
+      if (doCheck) {
+        // report: last check → now, then now becomes the last check
+        const now = Date.now();
+        const report = last
+          ? { t: now, text: (gainsVs(last) || 'no gains') + ` — since your previous check ${ago(now - last.t)} before` }
+          : { t: now, text: 'first check saved — your next check will show your gains' };
+        LS.set('breport', JSON.stringify(report));
+        last = { t: now, v: cur };
+        LS.set('bsnap', JSON.stringify(last));
+      }
+
+      let report = null;
+      try { report = JSON.parse(LS.get('breport', 'null')); } catch {}
+      let gainHtml = '';
+      if (report) gainHtml += `<div class="ng-report">📊 <b>Check ${ago(Date.now() - report.t)} ago:</b> ${report.text}</div>`;
+      if (last) {
+        const g = gainsVs(last);
+        gainHtml += `<div class="ng-gain">📈 Since your last check (${ago(Date.now() - last.t)} ago): `
+          + (g || 'no gains yet') + (g ? '. Tap 📊 Check to save.' : '') + '</div>';
+      } else {
+        gainHtml += '<div class="ng-gain">📈 Tap <b>📊 Check</b> to save your stats. Each check then shows your gains since the one before.</div>';
+      }
       const modTxt = k => { const m = raw[k].m; return m ? `<span class="${m > 0 ? 'ng-up' : 'ng-down'}">(${m > 0 ? '+' : ''}${m}%)</span>` : ''; };
       const total = keys.reduce((t, k) => t + st[k], 0);
       const sorted = keys.slice().sort((a, b) => st[b] - st[a]);
@@ -911,16 +933,11 @@ document.documentElement.dataset.novaTornHelper = '1';
     if (!anchor) return;
     const box = document.createElement('div');
     box.id = 'nova-gym';
-    box.innerHTML = '<div class="ng-head">💪 My battle stats <span><button class="ng-mark" title="Start counting gains from now">📌 Mark</button> '
+    box.innerHTML = '<div class="ng-head">💪 My battle stats <span><button class="ng-check" title="Show gains since your last check, then save this as the new last check">📊 Check</button> '
       + '<button class="ng-go" title="Reload stats">↻</button></span></div><div class="ng-body"></div>';
     if (anchor.classList.contains('content-title')) anchor.after(box); else anchor.prepend(box);
     box.querySelector('.ng-go').onclick = () => renderGymBox(box);
-    box.querySelector('.ng-mark').onclick = () => {
-      if (!box.dataset.cur) return;
-      if (!confirm('Start counting stat gains from now?')) return;
-      LS.set('bsnap', JSON.stringify({ t: Date.now(), v: JSON.parse(box.dataset.cur) }));
-      renderGymBox(box);
-    };
+    box.querySelector('.ng-check').onclick = () => renderGymBox(box, true);
     renderGymBox(box);
   }
 
