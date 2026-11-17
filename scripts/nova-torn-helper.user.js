@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      4.0
+// @version      4.1
 // @description  All-in-one: 💪 battle stats on the Gym page, 💊 drug cooldown alarm, ✅ war targets, ✈️ travel helper, 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain timer + repeating chain alarm, ⚡ energy alert, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
@@ -126,7 +126,8 @@ document.documentElement.dataset.novaTornHelper = '1';
   #nova-gym .ng-tip{color:#ccc!important;padding-top:6px;line-height:16px}
   #nova-travel{margin:8px 0;background:#1e1e1e;color:#ddd;border:1px solid #444;border-radius:6px;font:12px Arial,sans-serif;overflow-x:auto}
   #nova-travel .nt-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:8px;background:#2b2b2b;font-weight:bold}
-  #nova-travel .nt-head label{font-weight:normal;margin-left:auto}
+  #nova-travel .nt-head label{font-weight:normal}
+  #nova-travel .nt-head label:first-of-type{margin-left:auto}
   #nova-travel input{width:50px;background:#111;color:#eee;border:1px solid #555;border-radius:4px;padding:2px}
   #nova-travel button{background:#444;color:#eee;border:1px solid #666;border-radius:4px;padding:2px 8px}
   #nova-travel .nt-body{padding:6px 8px}
@@ -1019,6 +1020,7 @@ document.documentElement.dataset.novaTornHelper = '1';
     body.textContent = 'Loading…';
     try {
       const cap = Math.max(1, +LS.get('cap', '10') || 10);
+      const fee = Math.min(50, Math.max(0, parseFloat(LS.get('fee', '5')) || 0));   // % you pay when selling
       const [mv, txt] = await Promise.all([marketValues(), httpGet('https://yata.yt/api/v1/travel/export/')]);
       const stocks = JSON.parse(txt).stocks || {};
       const rows = [];
@@ -1027,7 +1029,7 @@ document.documentElement.dataset.novaTornHelper = '1';
         let best = null;
         for (const it of c.stocks || []) {
           if (!(it.quantity > 0) || !mv[it.id]) continue;
-          const profit = mv[it.id] - it.cost;
+          const profit = Math.round(mv[it.id] * (1 - fee / 100) - it.cost);   // after the sell fee
           if (!best || profit > best.profit) best = { name: it.name, profit, qty: it.quantity };
         }
         if (!best || best.profit <= 0) continue;
@@ -1038,7 +1040,7 @@ document.documentElement.dataset.novaTornHelper = '1';
       body.innerHTML = rows.length ? `<table><tr><th>Where</th><th>Best item</th><th>Profit/ea</th><th>Stock</th><th>Per hour*</th><th>Flight</th></tr>`
         + rows.map(r => `<tr><td>${YATA_CC[r.cc]}</td><td>${r.name}</td><td>${money(r.profit)}</td><td>${r.qty.toLocaleString()}</td>`
           + `<td><b>${money(r.perHour)}</b></td><td>${Math.floor(FLIGHT_MIN[r.cc] / 60)}:${String(FLIGHT_MIN[r.cc] % 60).padStart(2, '0')}</td></tr>`).join('')
-        + `</table><div class="nt-note">* carrying ${cap} items, round trip, standard flight times. Stock from YATA (updated ${Math.min(...rows.map(r => r.age))}–${Math.max(...rows.map(r => r.age))} min ago).</div>`
+        + `</table><div class="nt-note">* after a ${fee}% sell fee, carrying ${cap} items, round trip, standard flight times. Stock from YATA (updated ${Math.min(...rows.map(r => r.age))}–${Math.max(...rows.map(r => r.age))} min ago).</div>`
         : 'No profitable items in stock right now.';
       // colour set on each cell directly: beats any page style (Torn's desktop CSS darkened the text)
       body.querySelectorAll('th, td, td b').forEach(el => {
@@ -1059,9 +1061,11 @@ document.documentElement.dataset.novaTornHelper = '1';
     box.id = 'nova-travel';
     box.innerHTML = `<div class="nt-head">✈️ Best items to bring back
         <label>I can carry <input type="number" min="1" class="nt-cap" value="${LS.get('cap', '10')}"> items</label>
+        <label>Sell fee <input type="number" min="0" max="50" step="0.5" class="nt-fee" value="${LS.get('fee', '5')}">%</label>
         <button class="nt-go">↻</button></div><div class="nt-body"></div>`;
     if (anchor.classList.contains('content-title')) anchor.after(box); else anchor.prepend(box);
     box.querySelector('.nt-cap').onchange = e => { LS.set('cap', String(Math.max(1, +e.target.value || 10))); renderTravelTable(box); };
+    box.querySelector('.nt-fee').onchange = e => { LS.set('fee', String(Math.min(50, Math.max(0, parseFloat(e.target.value) || 0)))); renderTravelTable(box); };
     box.querySelector('.nt-go').onclick = () => renderTravelTable(box);
     renderTravelTable(box);
   }

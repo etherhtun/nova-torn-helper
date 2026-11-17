@@ -51,7 +51,7 @@ https://raw.githubusercontent.com/etherhtun/nova-torn-helper/main/scripts/nova-t
 
 ### ✈️ Travel
 - While flying: a ✈️ landing countdown on every page.
-- On the Travel Agency page: the best item to bring back from each country, ranked by profit per hour for how many items you can carry. Stock from [YATA](https://yata.yt).
+- On the Travel Agency page: the best item to bring back from each country, ranked by profit per hour for how many items you can carry, after the sell fee you set (default 5%; use 0 for bazaar sales). Stock from [YATA](https://yata.yt).
 
 ### 💰 Money
 - **Item Market / Bazaar:** a **−$1** button next to each price box fills in $1 below the cheapest listing.
