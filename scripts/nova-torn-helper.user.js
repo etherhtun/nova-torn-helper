@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      3.7
+// @version      3.8
 // @description  All-in-one: 💪 battle stats on the Gym page, 💊 drug cooldown alarm, ✅ war targets, ✈️ travel helper, 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain timer + repeating chain alarm, ⚡ energy alert, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
@@ -121,6 +121,7 @@ document.documentElement.dataset.novaTornHelper = '1';
   #nova-gym tr.ng-hd td{font-size:11px!important}
   #nova-gym .ng-up,#nova-gym .ng-down{font-size:11px}
   #nova-gym tr.ng-total td{border-top:1px solid #555;font-weight:bold!important}
+  #nova-gym .ng-gain{color:#eee!important;padding-top:6px;line-height:16px}
   #nova-gym .ng-tip{color:#ccc!important;padding-top:6px;line-height:16px}
   #nova-travel{margin:8px 0;background:#1e1e1e;color:#ddd;border:1px solid #444;border-radius:6px;font:12px Arial,sans-serif;overflow-x:auto}
   #nova-travel .nt-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:8px;background:#2b2b2b;font-weight:bold}
@@ -860,6 +861,30 @@ document.documentElement.dataset.novaTornHelper = '1';
       const st = {}, eff = {};
       keys.forEach(k => { st[k] = raw[k].v; eff[k] = Math.round(raw[k].v * (1 + raw[k].m / 100)); });
       const effTotal = keys.reduce((t, k) => t + eff[k], 0);
+
+      // 📈 gains: remember the last two different snapshots, show what went up since the previous one
+      let snap = {};
+      try { snap = JSON.parse(LS.get('bsnap', '{}')) || {}; } catch {}
+      const cur = {}; keys.forEach(k => { cur[k] = Math.round(st[k]); });
+      const same = (a, b2) => a && keys.every(k => a[k] === b2[k]);
+      if (!same(snap.last && snap.last.v, cur)) {
+        snap = { prev: snap.last || null, last: { t: Date.now(), v: cur } };
+        LS.set('bsnap', JSON.stringify(snap));
+      }
+      const ago = ms => { const h = Math.floor(ms / 3600000), d = Math.floor(h / 24);
+        return d >= 1 ? `${d} day${d > 1 ? 's' : ''}` : h >= 1 ? `${h} hour${h > 1 ? 's' : ''}` : `${Math.max(1, Math.round(ms / 60000))} min`; };
+      let gainHtml = '';
+      if (snap.prev) {
+        const ups = keys.map(k => [k, cur[k] - snap.prev.v[k]]).filter(([, d]) => d > 0);
+        const sum = ups.reduce((t, [, d]) => t + d, 0);
+        gainHtml = ups.length
+          ? `<div class="ng-gain">📈 Since last check (${ago(Date.now() - snap.prev.t)} ago): `
+            + ups.map(([k, d]) => `${STAT_NAMES[k]} <b>+${d.toLocaleString()}</b>`).join(' · ')
+            + (ups.length > 1 ? ` · Total <b>+${sum.toLocaleString()}</b>` : '') + '</div>'
+          : '';
+      } else {
+        gainHtml = '<div class="ng-gain">📈 Stats saved — your gains will show here after your next training.</div>';
+      }
       const modTxt = k => { const m = raw[k].m; return m ? `<span class="${m > 0 ? 'ng-up' : 'ng-down'}">(${m > 0 ? '+' : ''}${m}%)</span>` : ''; };
       const total = keys.reduce((t, k) => t + st[k], 0);
       const sorted = keys.slice().sort((a, b) => st[b] - st[a]);
@@ -870,7 +895,7 @@ document.documentElement.dataset.novaTornHelper = '1';
           <td>${Math.round(st[k]).toLocaleString()}</td><td>${(st[k] / total * 100).toFixed(0)}%</td>
           <td>${eff[k].toLocaleString()} ${modTxt(k)}</td></tr>`).join('')}
           <tr class="ng-total"><td>Total</td><td>${Math.round(total).toLocaleString()}</td><td></td><td>${effTotal.toLocaleString()}</td></tr></table>
-        <div class="ng-tip">${keeps
+        ${gainHtml}<div class="ng-tip">${keeps
           ? `🏋️ To keep <b>${SPECIALTY[top]}</b> (${STAT_NAMES[top]} 25% ahead), keep every other stat under <b>${cap.toLocaleString()}</b>.`
             + ` Room left: ${keys.filter(k => k !== top).map(k => `${STAT_NAMES[k]} +${Math.max(0, cap - Math.round(st[k])).toLocaleString()}`).join(' · ')}`
           : `⚠️ ${STAT_NAMES[second]} is within 25% of ${STAT_NAMES[top]}, so ${SPECIALTY[top]} needs ${STAT_NAMES[top]} at ${Math.ceil(st[second] * 1.25).toLocaleString()}.`}</div>`;
