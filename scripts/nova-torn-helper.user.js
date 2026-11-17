@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      3.5
-// @description  All-in-one: 💊 drug cooldown alarm, ✅ war targets, ✈️ travel helper, 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain timer + repeating chain alarm, ⚡ energy alert, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
+// @version      3.6
+// @description  All-in-one: 💪 battle stats on the Gym page, 💊 drug cooldown alarm, ✅ war targets, ✈️ travel helper, 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain timer + repeating chain alarm, ⚡ energy alert, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_registerMenuCommand
@@ -111,6 +111,15 @@ document.documentElement.dataset.novaTornHelper = '1';
   #eht-card #eht-next{background:#444;color:#eee}
   #eht-fly{position:fixed;right:10px;bottom:140px;z-index:99999;display:none;padding:7px 12px;border-radius:18px;
     background:#1565c0;color:#fff;font:bold 14px monospace;box-shadow:0 2px 6px #0008;white-space:nowrap}
+  #nova-gym{margin:8px 0;background:#1e1e1e;color:#ddd;border:1px solid #444;border-radius:6px;font:12px Arial,sans-serif}
+  #nova-gym .ng-head{display:flex;align-items:center;justify-content:space-between;padding:8px;background:#2b2b2b;font-weight:bold;color:#eee}
+  #nova-gym button{background:#444;color:#eee;border:1px solid #666;border-radius:4px;padding:2px 8px}
+  #nova-gym .ng-body{padding:6px 8px}
+  #nova-gym table{border-collapse:collapse;font:13px Arial,sans-serif}
+  #nova-gym td{padding:3px 14px 3px 0;white-space:nowrap}
+  #nova-gym tr.ng-top td{font-weight:bold!important}
+  #nova-gym tr.ng-total td{border-top:1px solid #555;font-weight:bold!important}
+  #nova-gym .ng-tip{color:#ccc!important;padding-top:6px;line-height:16px}
   #nova-travel{margin:8px 0;background:#1e1e1e;color:#ddd;border:1px solid #444;border-radius:6px;font:12px Arial,sans-serif;overflow-x:auto}
   #nova-travel .nt-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:8px;background:#2b2b2b;font-weight:bold}
   #nova-travel .nt-head label{font-weight:normal;margin-left:auto}
@@ -819,6 +828,64 @@ document.documentElement.dataset.novaTornHelper = '1';
   }, 1000);
   loadBars();
 
+  // ---------- 💪 battle stats box (Gym page) ----------
+  // Shows your four battle stats + share, and how high the other stats can go
+  // while your top stat keeps its 25% lead (needed for its specialty gym).
+  const SPECIALTY = { strength: 'Gym 3000', defense: "Mr. Isoyama's", speed: 'Total Rebound', dexterity: 'Elites' };
+  const STAT_NAMES = { strength: 'Strength', defense: 'Defense', speed: 'Speed', dexterity: 'Dexterity' };
+
+  async function loadBattleStats() {
+    let j;
+    try { j = await api('v2/user/battlestats'); } catch { j = null; }
+    const v2 = j && j.battlestats;
+    if (v2 && v2.strength) {
+      const val = x => (typeof x === 'object' ? x.value : x);
+      return { strength: val(v2.strength), defense: val(v2.defense), speed: val(v2.speed), dexterity: val(v2.dexterity) };
+    }
+    const v1 = await api('user/?selections=battlestats');   // older API as a fallback
+    if (v1.strength == null) throw new Error('Torn did not return battle stats');
+    return { strength: v1.strength, defense: v1.defense, speed: v1.speed, dexterity: v1.dexterity };
+  }
+
+  async function renderGymBox(box) {
+    const body = box.querySelector('.ng-body');
+    body.textContent = 'Loading…';
+    try {
+      const st = await loadBattleStats();
+      const keys = Object.keys(STAT_NAMES);
+      const total = keys.reduce((t, k) => t + st[k], 0);
+      const sorted = keys.slice().sort((a, b) => st[b] - st[a]);
+      const top = sorted[0], second = sorted[1];
+      const cap = Math.floor(st[top] / 1.25);
+      const keeps = st[second] <= cap;
+      body.innerHTML = `<table>${keys.map(k => `<tr${k === top ? ' class="ng-top"' : ''}><td>${STAT_NAMES[k]}</td>
+          <td>${Math.round(st[k]).toLocaleString()}</td><td>${(st[k] / total * 100).toFixed(0)}%</td></tr>`).join('')}
+          <tr class="ng-total"><td>Total</td><td>${Math.round(total).toLocaleString()}</td><td></td></tr></table>
+        <div class="ng-tip">${keeps
+          ? `🏋️ To keep <b>${SPECIALTY[top]}</b> (${STAT_NAMES[top]} 25% ahead), keep every other stat under <b>${cap.toLocaleString()}</b>.`
+            + ` Room left: ${keys.filter(k => k !== top).map(k => `${STAT_NAMES[k]} +${Math.max(0, cap - Math.round(st[k])).toLocaleString()}`).join(' · ')}`
+          : `⚠️ ${STAT_NAMES[second]} is within 25% of ${STAT_NAMES[top]}, so ${SPECIALTY[top]} needs ${STAT_NAMES[top]} at ${Math.ceil(st[second] * 1.25).toLocaleString()}.`}</div>`;
+      body.querySelectorAll('td, b').forEach(el => el.style.setProperty('color', el.tagName === 'B' ? '#5dff7a' : '#eee', 'important'));
+    } catch (e) {
+      const msg = e.message || String(e);
+      body.textContent = /error (16|2)\b/.test(msg)
+        ? '🔑 Battle stats need a LIMITED (or Full) API key. ' + msg
+        : '⚠️ Could not load battle stats: ' + msg;
+    }
+  }
+
+  function addGymBox() {
+    if (!location.pathname.includes('gym.php') || document.getElementById('nova-gym') || !getKey()) return;
+    const anchor = document.querySelector('.content-title') || document.querySelector('.content-wrapper');
+    if (!anchor) return;
+    const box = document.createElement('div');
+    box.id = 'nova-gym';
+    box.innerHTML = '<div class="ng-head">💪 My battle stats <button class="ng-go">↻</button></div><div class="ng-body"></div>';
+    if (anchor.classList.contains('content-title')) anchor.after(box); else anchor.prepend(box);
+    box.querySelector('.ng-go').onclick = () => renderGymBox(box);
+    renderGymBox(box);
+  }
+
   // ---------- 💊 drug cooldown alarm ----------
   // Beeps once when your drug cooldown runs out. The end time is remembered
   // across pages, so it still fires if the cooldown ends between two checks.
@@ -1025,6 +1092,7 @@ document.documentElement.dataset.novaTornHelper = '1';
     decorateRows();
     addPriceButtons();
     addTravelBox();
+    addGymBox();
     if (panel.style.display === 'block') {
       const miss = enemyList.concat(enemyOkay).map(m => m.id).filter(id => !ffGet(id));
       if (miss.length) ffFetch(miss);
