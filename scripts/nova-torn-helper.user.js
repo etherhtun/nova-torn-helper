@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      4.2
+// @version      4.3
 // @description  All-in-one: 💪 battle stats on the Gym page, 💊 drug cooldown alarm, ✅ war targets, ✈️ travel helper, 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain timer + repeating chain alarm, ⚡ energy alert, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
@@ -882,7 +882,13 @@ document.documentElement.dataset.novaTornHelper = '1';
           + (ups.length > 1 ? ` · Total <b>+${sum.toLocaleString()}</b>` : '') : '';
       };
 
-      if (doCheck) {
+      if (doCheck && last && !gainsVs(last)) {
+        // nothing gained since the last check (e.g. a double tap): keep the last report as it is
+        toast.textContent = '📊 No new gains since your last check — your last report is kept.';
+        toast.style.display = 'block';
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => { toast.style.display = 'none'; }, 4000);
+      } else if (doCheck) {
         // report: last check → now, then now becomes the last check
         const now = Date.now();
         const report = last
