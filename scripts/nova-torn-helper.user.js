@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      4.1
+// @version      4.2
 // @description  All-in-one: 💪 battle stats on the Gym page, 💊 drug cooldown alarm, ✅ war targets, ✈️ travel helper, 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain timer + repeating chain alarm, ⚡ energy alert, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
@@ -123,6 +123,7 @@ document.documentElement.dataset.novaTornHelper = '1';
   #nova-gym tr.ng-total td{border-top:1px solid #555;font-weight:bold!important}
   #nova-gym .ng-report{margin-top:6px;padding:6px 8px;border-radius:5px;background:#1f4d2b;color:#eee!important;line-height:16px}
   #nova-gym .ng-gain{color:#eee!important;padding-top:6px;line-height:16px}
+  #nova-gym .ng-train{margin-top:6px;padding:6px 8px;border-radius:5px;background:#2a3550;color:#eee!important;line-height:16px}
   #nova-gym .ng-tip{color:#ccc!important;padding-top:6px;line-height:16px}
   #nova-travel{margin:8px 0;background:#1e1e1e;color:#ddd;border:1px solid #444;border-radius:6px;font:12px Arial,sans-serif;overflow-x:auto}
   #nova-travel .nt-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:8px;background:#2b2b2b;font-weight:bold}
@@ -909,11 +910,29 @@ document.documentElement.dataset.novaTornHelper = '1';
       const top = sorted[0], second = sorted[1];
       const cap = Math.floor(st[top] / 1.25);
       const keeps = st[second] <= cap;
+
+      // 🎯 train next: an attacker's plan — most energy into the other stats
+      // (Speed to hit, Strength for damage, then Defense); ~10% into your top stat.
+      const PLAN = { speed: 40, strength: 35, defense: 15, dexterity: 15 };
+      const others = keys.filter(k => k !== top);
+      const w = {}; others.forEach(k => { w[k] = PLAN[k]; });
+      const wSum = others.reduce((t, k) => t + w[k], 0);
+      others.forEach(k => { w[k] = Math.round(w[k] / wSum * 90); });   // 90% split over the other three
+      w[top] = 10;
+      // the stat furthest behind the plan = lowest stat-per-weight among the other three
+      const behind = others.slice().sort((a, b) => st[a] / w[a] - st[b] / w[b]);
+      const nearCap = behind.filter(k => cap - st[k] < cap * 0.1);       // within 10% of the specialty limit
+      const next = behind.find(k => !nearCap.includes(k)) || top;
+      const trainHtml = `<div class="ng-train">🎯 <b>Train next: ${STAT_NAMES[next]}</b>`
+        + (behind[1] && behind[1] !== next ? ` (then ${STAT_NAMES[behind.find(k => k !== next && !nearCap.includes(k)) || top]})` : '')
+        + `. Suggested energy: ${keys.slice().sort((a, b) => w[b] - w[a]).map(k => `${STAT_NAMES[k]} ${w[k]}%`).join(' · ')}.`
+        + (nearCap.length ? ` ⚠️ ${nearCap.map(k => STAT_NAMES[k]).join(', ')} close to the ${SPECIALTY[top]} limit — train ${STAT_NAMES[top]} first.` : '')
+        + '</div>';
       body.innerHTML = `<table><tr class="ng-hd"><td></td><td>Battle</td><td>Share</td><td>Effective</td></tr>${keys.map(k => `<tr${k === top ? ' class="ng-top"' : ''}><td>${STAT_NAMES[k]}</td>
           <td>${Math.round(st[k]).toLocaleString()}</td><td>${(st[k] / total * 100).toFixed(0)}%</td>
           <td>${eff[k].toLocaleString()} ${modTxt(k)}</td></tr>`).join('')}
           <tr class="ng-total"><td>Total</td><td>${Math.round(total).toLocaleString()}</td><td></td><td>${effTotal.toLocaleString()}</td></tr></table>
-        ${gainHtml}<div class="ng-tip">${keeps
+        ${gainHtml}${trainHtml}<div class="ng-tip">${keeps
           ? `🏋️ To keep <b>${SPECIALTY[top]}</b> (${STAT_NAMES[top]} 25% ahead), keep every other stat under <b>${cap.toLocaleString()}</b>.`
             + ` Room left: ${keys.filter(k => k !== top).map(k => `${STAT_NAMES[k]} +${Math.max(0, cap - Math.round(st[k])).toLocaleString()}`).join(' · ')}`
           : `⚠️ ${STAT_NAMES[second]} is within 25% of ${STAT_NAMES[top]}, so ${SPECIALTY[top]} needs ${STAT_NAMES[top]} at ${Math.ceil(st[second] * 1.25).toLocaleString()}.`}</div>`;

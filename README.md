@@ -47,6 +47,7 @@ https://raw.githubusercontent.com/etherhtun/nova-torn-helper/main/scripts/nova-t
 ### 💪 Gym page
 - Your battle stats, share and **effective stats** (with each bonus/penalty).
 - **📊 Check** (like Torn Stats' manual update): shows what you gained since your last check, then saves now as the new last check. Between checks the box previews your gains so far.
+- **🎯 Train next:** which stat to train now, from an attacker's plan (Speed 40% · Strength 35% · Defense 15% · top stat 10%), skipping any stat close to your specialty gym limit.
 - How high your other stats can go while your top stat keeps its 25% lead for its specialty gym (Elites, Gym 3000, Mr. Isoyama's, Total Rebound).
 
 ### ✈️ Travel
