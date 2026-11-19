@@ -59,6 +59,8 @@ https://raw.githubusercontent.com/etherhtun/nova-torn-helper/main/scripts/nova-t
 - **Company Stock page:** a **Fill stock** button fills each order box by daily sales.
 
 ## Good to know
+- The 🎯 🏥 buttons cover something? **Press and drag them** anywhere — the position is remembered and the panels follow.
+- Forgot your key? Torn → Settings → API Keys, or (computer) Tampermonkey menu → 🔑 Set API key shows the saved one.
 - Alarms only work while Torn is open on screen (the phone can't beep for a closed app).
 - Your API key stays on your own device. It's only sent to Torn's API and FFScouter (for FF), never anywhere else.
 - The code is all in one file in this repository — anyone can read it.

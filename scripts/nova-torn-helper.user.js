@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      4.3
+// @version      4.4
 // @description  All-in-one: 💪 battle stats on the Gym page, 💊 drug cooldown alarm, ✅ war targets, ✈️ travel helper, 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain timer + repeating chain alarm, ⚡ energy alert, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
@@ -1166,6 +1166,53 @@ document.documentElement.dataset.novaTornHelper = '1';
       anchor.after(b, msg);
     }
   }
+
+  // ---------- move the buttons out of the way ----------
+  // Press and drag 🎯 or 🏥 to move both buttons; everything that pops up from
+  // them (panels, chain timer, flight timer, messages) moves along. Remembered.
+  const HOME = { 'eht-btn': [10, 90], 'eht-tbtn': [60, 90], 'eht-panel': [10, 140], 'eht-card': [10, 140],
+    'eht-toast': [10, 145], 'eht-fly': [10, 140], 'eht-chain': [110, 96] };
+  let off = { x: 0, y: 0 };
+  try { off = JSON.parse(LS.get('dock', '{"x":0,"y":0}')) || off; } catch {}
+  function placeAll() {
+    off.x = Math.max(0, Math.min(off.x, window.innerWidth - 120));
+    off.y = Math.max(-80, Math.min(off.y, window.innerHeight - 150));
+    for (const [id, [r, b]] of Object.entries(HOME)) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      // keep wide things (panels, pop-ups) inside the screen on the left side
+      const w = { 'eht-panel': 300, 'eht-card': 270, 'eht-toast': 220, 'eht-fly': 170, 'eht-chain': 150 }[id] || 0;
+      el.style.right = Math.max(4, Math.min(r + off.x, window.innerWidth - w - 8)) + 'px';
+      el.style.bottom = (b + off.y) + 'px';
+      if (id === 'eht-panel' || id === 'eht-card') el.style.maxHeight = Math.max(160, window.innerHeight - (b + off.y) - 10) + 'px';
+    }
+  }
+  let drag = null;
+  for (const el of [btn, tbtn]) {
+    el.style.touchAction = 'none';
+    el.addEventListener('pointerdown', ev => {
+      drag = { sx: ev.clientX, sy: ev.clientY, ox: off.x, oy: off.y, moved: false };
+      el.setPointerCapture && el.setPointerCapture(ev.pointerId);
+    });
+    el.addEventListener('pointermove', ev => {
+      if (!drag) return;
+      const dx = ev.clientX - drag.sx, dy = ev.clientY - drag.sy;
+      if (!drag.moved && Math.hypot(dx, dy) < 8) return;     // small wiggle = still a tap
+      drag.moved = true;
+      off = { x: drag.ox - dx, y: drag.oy - dy };
+      placeAll();
+    });
+    el.addEventListener('pointerup', () => {
+      if (drag && drag.moved) {
+        LS.set('dock', JSON.stringify(off));
+        // the click that follows a drag should not open the panel
+        window.addEventListener('click', e => { e.stopPropagation(); e.preventDefault(); }, { capture: true, once: true });
+      }
+      drag = null;
+    });
+  }
+  window.addEventListener('resize', placeAll);
+  placeAll();
 
   // ---------- loops ----------
   setInterval(() => {
