@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      4.4
+// @version      4.5
 // @description  All-in-one: 💪 battle stats on the Gym page, 💊 drug cooldown alarm, ✅ war targets, ✈️ travel helper, 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain timer + repeating chain alarm, ⚡ energy alert, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
@@ -37,6 +37,8 @@ document.documentElement.dataset.novaTornHelper = '1';
     set: (k, v) => { try { localStorage.setItem('ehtimer_' + k, v); } catch {} },
   };
   const getKey = () => (PDA_KEY.includes('PDA-APIKEY') ? LS.get('key', '') : PDA_KEY);
+  // Text from other sites (names, item names, error messages) is cleaned before it goes into the page.
+  const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
   // ---------- API key on desktop (PDA fills it in by itself) ----------
   function askKey() {
@@ -251,7 +253,7 @@ document.documentElement.dataset.novaTornHelper = '1';
   function buildShell() {
     panel.innerHTML = `<header>
         ${getKey() ? '' : '<input id="eht-key" placeholder="API key">'}
-        <input id="eht-fid" placeholder="Enemy faction ID" value="${LS.get('fid', '')}">
+        <input id="eht-fid" placeholder="Enemy faction ID" value="${esc(LS.get('fid', ''))}">
         <button id="eht-go">Load</button>
       </header>
       <div class="bar">
@@ -301,17 +303,17 @@ document.documentElement.dataset.novaTornHelper = '1';
     const list = q('#eht-list');
     if (sig !== listSig) {
       listSig = sig;
-      if (msg) list.innerHTML = `<div class="msg">${msg.startsWith('No') || msg.startsWith('Nobody') || msg.startsWith('Enter') ? '' : '⚠️ '}${msg}</div>`;
+      if (msg) list.innerHTML = `<div class="msg">${msg.startsWith('No') || msg.startsWith('Nobody') || msg.startsWith('Enter') ? '' : '⚠️ '}${esc(msg)}</div>`;
       else {
         list.innerHTML = rows.map(m => {
           const b = ffBadge(m.id);
           return `<div class="row" data-id="${m.id}">
-            <a href="https://www.torn.com/profiles.php?XID=${m.id}">${m.name} [${m.level}]</a>
-            <span class="ffcol"><span class="eht-ff" style="background:${b.bg}" title="${b.title}">${b.text}</span>
+            <a href="https://www.torn.com/profiles.php?XID=${esc(m.id)}">${esc(m.name)} [${esc(m.level)}]</a>
+            <span class="ffcol"><span class="eht-ff" style="background:${b.bg}" title="${esc(b.title)}">${esc(b.text)}</span>
             <span class="t">${m.flag || ''}</span>
             <a class="atk" href="${attackUrl(m.id)}" title="Attack">⚔️</a></span></div>`;
         }).join('')
-          + (ffError ? `<div class="msg">⚠️ ${ffError}</div>` : '')
+          + (ffError ? `<div class="msg">⚠️ ${esc(ffError)}</div>` : '')
           + `<div class="msg" id="eht-foot"></div>`;
       }
     }
@@ -342,11 +344,11 @@ document.documentElement.dataset.novaTornHelper = '1';
     const sig = 'okay|' + (msg || rows.map(m => m.id + ':' + m.la + ':' + ffBadge(m.id).text).join(','));
     if (sig !== listSig) {
       listSig = sig;
-      list.innerHTML = msg ? `<div class="msg">${msg}</div>` : rows.map(m => {
+      list.innerHTML = msg ? `<div class="msg">${esc(msg)}</div>` : rows.map(m => {
         const b = ffBadge(m.id);
         return `<div class="row" data-id="${m.id}">
-          <a href="https://www.torn.com/profiles.php?XID=${m.id}">${DOT[m.la] || '⚪'} ${m.name} [${m.level}]</a>
-          <span class="ffcol"><span class="eht-ff" style="background:${b.bg}" title="${b.title}">${b.text}</span>
+          <a href="https://www.torn.com/profiles.php?XID=${esc(m.id)}">${DOT[m.la] || '⚪'} ${esc(m.name)} [${esc(m.level)}]</a>
+          <span class="ffcol"><span class="eht-ff" style="background:${b.bg}" title="${esc(b.title)}">${esc(b.text)}</span>
           <a class="atk" href="${attackUrl(m.id)}" title="Attack">⚔️</a></span></div>`;
       }).join('') + `<div class="msg" id="eht-foot"></div>`;
     }
@@ -359,7 +361,7 @@ document.documentElement.dataset.novaTornHelper = '1';
     const key = getKey();
     if (!key) throw new Error('Enter a Public/Limited API key.');
     const sep = path.includes('?') ? '&' : '?';
-    const r = await fetch(`https://api.torn.com/${path}${sep}key=${key}&comment=EnemyHospTimer`);
+    const r = await fetch(`https://api.torn.com/${path}${sep}key=${key}&comment=NovaTornHelper`);
     const j = await r.json();
     if (j.error) throw new Error(`API error ${j.error.code}: ${j.error.error}`);
     return j;
@@ -516,6 +518,8 @@ document.documentElement.dataset.novaTornHelper = '1';
         j.forEach(r => { ffCache[String(r.player_id)] = { ff: r.fair_fight, bs: r.bs_estimate_human, t: now }; });
       }
       ffError = '';
+      const cutoff = Date.now() - FF_TTL;                      // forget expired players, so storage never fills up
+      for (const id in ffCache) if (!ffCache[id] || ffCache[id].t < cutoff) delete ffCache[id];
       LS.set('ff', JSON.stringify(ffCache));
     } catch (e) {
       ffError = 'FF: ' + (e.message || e) + ' (is your key registered at ffscouter.com?)';
@@ -533,6 +537,7 @@ document.documentElement.dataset.novaTornHelper = '1';
   let ffWarned = false;
 
   function ffColor(ff) {
+    ff = Number(ff);
     if (ff <= 1.5) return '#3b6bff';
     if (ff <= 2.25) return '#22d3ee';
     if (ff <= 3.5) return '#34d399';
@@ -723,9 +728,9 @@ document.documentElement.dataset.novaTornHelper = '1';
         if (p.status?.state !== 'Okay') continue;     // in hospital / jail / travelling → skip
         ffCache[t.id] = { ff: t.ff, bs: t.bs, t: Date.now() };
         const ff = t.ff != null ? Number(t.ff).toFixed(2) : '?';
-        setTB(`<a href="https://www.torn.com/profiles.php?XID=${t.id}">${p.name} [${p.level}]</a>
-          <span class="eht-ff" style="background:${t.ff != null ? ffColor(t.ff) : '#666'}">${ff}</span><br>
-          est. stats ${t.bs} · last active ${p.last_action?.relative ?? '?'}`);
+        setTB(`<a href="https://www.torn.com/profiles.php?XID=${esc(t.id)}">${esc(p.name)} [${esc(p.level)}]</a>
+          <span class="eht-ff" style="background:${t.ff != null ? ffColor(t.ff) : '#666'}">${esc(ff)}</span><br>
+          est. stats ${esc(t.bs)} · last active ${esc(p.last_action?.relative ?? '?')}`);
         const atk = cq('#eht-atk');
         atk.href = attackUrl(t.id);
         atk.classList.remove('off');
@@ -733,7 +738,7 @@ document.documentElement.dataset.novaTornHelper = '1';
       }
       setTB('Everyone checked was busy — press Next ▶');
     } catch (e) {
-      setTB('⚠️ ' + (e.message || e));
+      setTB('⚠️ ' + esc(e.message || e));
     } finally {
       tBusy = false;
     }
@@ -1063,7 +1068,7 @@ document.documentElement.dataset.novaTornHelper = '1';
       }
       rows.sort((a, b) => b.perHour - a.perHour);
       body.innerHTML = rows.length ? `<table><tr><th>Where</th><th>Best item</th><th>Profit/ea</th><th>Stock</th><th>Per hour*</th><th>Flight</th></tr>`
-        + rows.map(r => `<tr><td>${YATA_CC[r.cc]}</td><td>${r.name}</td><td>${money(r.profit)}</td><td>${r.qty.toLocaleString()}</td>`
+        + rows.map(r => `<tr><td>${YATA_CC[r.cc]}</td><td>${esc(r.name)}</td><td>${money(r.profit)}</td><td>${r.qty.toLocaleString()}</td>`
           + `<td><b>${money(r.perHour)}</b></td><td>${Math.floor(FLIGHT_MIN[r.cc] / 60)}:${String(FLIGHT_MIN[r.cc] % 60).padStart(2, '0')}</td></tr>`).join('')
         + `</table><div class="nt-note">* after a ${fee}% sell fee, carrying ${cap} items, round trip, standard flight times. Stock from YATA (updated ${Math.min(...rows.map(r => r.age))}–${Math.max(...rows.map(r => r.age))} min ago).</div>`
         : 'No profitable items in stock right now.';
@@ -1123,8 +1128,11 @@ document.documentElement.dataset.novaTornHelper = '1';
 
   // The item's picture URL contains its ID: /images/items/123/large.png
   function findItemId(input) {
-    for (let el = input; el && el !== document.body; el = el.parentElement) {
-      const img = el.querySelector('img[src*="/items/"]');
+    let depth = 0;
+    for (let el = input; el && el !== document.body && depth < 6; el = el.parentElement, depth++) {   // stay inside the item's own row
+      const imgs = el.querySelectorAll('img[src*="/items/"]');
+      if (imgs.length > 1) return null;                     // reached a list of many items → not this box's row
+      const img = imgs[0];
       if (img) { const m = img.src.match(/\/items\/(\d+)\//); if (m) return m[1]; }
     }
     return null;
@@ -1187,7 +1195,11 @@ document.documentElement.dataset.novaTornHelper = '1';
       if (id === 'eht-panel' || id === 'eht-card') el.style.maxHeight = Math.max(160, window.innerHeight - (b + off.y) - 10) + 'px';
     }
   }
-  let drag = null;
+  let drag = null, draggedAt = 0;
+  // a click right after a drag (on 🎯/🏥 only) should not open the panel
+  window.addEventListener('click', e => {
+    if (Date.now() - draggedAt < 350 && (btn.contains(e.target) || tbtn.contains(e.target))) { e.stopPropagation(); e.preventDefault(); }
+  }, true);
   for (const el of [btn, tbtn]) {
     el.style.touchAction = 'none';
     el.addEventListener('pointerdown', ev => {
@@ -1196,20 +1208,19 @@ document.documentElement.dataset.novaTornHelper = '1';
     });
     el.addEventListener('pointermove', ev => {
       if (!drag) return;
+      if (ev.pointerType === 'mouse' && !ev.buttons) { drag = null; return; }   // mouse button already released
       const dx = ev.clientX - drag.sx, dy = ev.clientY - drag.sy;
       if (!drag.moved && Math.hypot(dx, dy) < 8) return;     // small wiggle = still a tap
       drag.moved = true;
       off = { x: drag.ox - dx, y: drag.oy - dy };
       placeAll();
     });
-    el.addEventListener('pointerup', () => {
-      if (drag && drag.moved) {
-        LS.set('dock', JSON.stringify(off));
-        // the click that follows a drag should not open the panel
-        window.addEventListener('click', e => { e.stopPropagation(); e.preventDefault(); }, { capture: true, once: true });
-      }
+    const endDrag = () => {
+      if (drag && drag.moved) { LS.set('dock', JSON.stringify(off)); draggedAt = Date.now(); }
       drag = null;
-    });
+    };
+    el.addEventListener('pointerup', endDrag);
+    el.addEventListener('pointercancel', endDrag);
   }
   window.addEventListener('resize', placeAll);
   placeAll();
