@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      4.5
-// @description  All-in-one: 💪 battle stats on the Gym page, 💊 drug cooldown alarm, ✅ war targets, ✈️ travel helper, 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain timer + repeating chain alarm, ⚡ energy alert, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
+// @version      4.6
+// @description  All-in-one: 🧟 NPC loot timers, 💪 battle stats on the Gym page, 💊 drug cooldown alarm, ✅ war targets, ✈️ travel helper, 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain timer + repeating chain alarm, ⚡ energy alert, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_registerMenuCommand
@@ -93,7 +93,7 @@ document.documentElement.dataset.novaTornHelper = '1';
   #eht-panel .atk{font-size:15px;text-decoration:none}
   #eht-btn.eht-ring{animation:eht-pulse .5s infinite alternate}
   @keyframes eht-pulse{to{background:#ffd700;transform:scale(1.15)}}
-  #eht-toast{position:fixed;right:10px;bottom:145px;z-index:99999;background:#ffd700;color:#000;
+  #eht-toast{position:fixed;right:10px;bottom:145px;z-index:100001;background:#ffd700;color:#000;
     font:bold 12px Arial,sans-serif;padding:6px 10px;border-radius:6px;box-shadow:0 2px 6px #0008;display:none}
   .eht-ff{display:inline-block;margin-left:3px;padding:1px 4px;border-radius:3px;font:bold 11px Arial,sans-serif;
     color:#000;vertical-align:middle;line-height:14px;white-space:nowrap}
@@ -140,7 +140,19 @@ document.documentElement.dataset.novaTornHelper = '1';
   #nova-travel th{color:#aaa!important;font-weight:bold!important}
   #nova-travel td b{color:#5dff7a!important}
   #nova-travel .nt-note{color:#999;padding-top:6px;font-size:11px}
-  #eht-chain{position:fixed;right:110px;bottom:96px;z-index:99999;display:none;padding:7px 12px;border-radius:18px;
+  #eht-nbtn{position:fixed;right:110px;bottom:90px;z-index:99999;width:44px;height:44px;border-radius:50%;
+    background:#6a1b9a;color:#fff;font-size:22px;border:none;box-shadow:0 2px 6px #0008;}
+  #eht-npc{position:fixed;right:10px;bottom:140px;z-index:99999;width:280px;overflow:auto;background:#1e1e1e;color:#ddd;
+    font:12px Arial,sans-serif;border:1px solid #444;border-radius:8px;box-shadow:0 4px 12px #000a;display:none}
+  #eht-npc header{position:sticky;top:0;background:#2b2b2b;padding:6px 8px;font-weight:bold;display:flex;justify-content:space-between}
+  #eht-npc .np-age{font-weight:normal;color:#999}
+  #eht-npc .np-row{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid #333}
+  #eht-npc .np-row a{color:#8cf;text-decoration:none}
+  #eht-npc .np-row .atk{font-size:15px}
+  #eht-npc .np-soon{background:#4a3b00}
+  #eht-npc .np-ready{background:#123d1a}
+  #eht-npc .np-note{padding:6px 8px;color:#888;font-size:11px}
+  #eht-chain{position:fixed;right:160px;bottom:96px;z-index:99999;display:none;padding:7px 12px;border-radius:18px;
     background:#333;color:#fff;font:bold 14px monospace;box-shadow:0 2px 6px #0008;cursor:pointer;white-space:nowrap}
   #eht-chain.warn{background:#b8860b;color:#000}
   #eht-chain.urgent{background:#c0392b;animation:eht-blink .5s infinite alternate}
@@ -179,7 +191,7 @@ document.documentElement.dataset.novaTornHelper = '1';
     btn.classList.remove('eht-ring');
     const open = panel.style.display === 'block';
     panel.style.display = open ? 'none' : 'block';
-    if (!open) { card.style.display = 'none'; renderPanel(); refresh(true); }
+    if (!open) { card.style.display = 'none'; const nb = document.getElementById('eht-npc'); if (nb) nb.style.display = 'none'; renderPanel(); refresh(true); }
   };
 
   // ---------- alerts ----------
@@ -747,7 +759,7 @@ document.documentElement.dataset.novaTornHelper = '1';
   tbtn.onclick = () => {
     const open = card.style.display === 'block';
     card.style.display = open ? 'none' : 'block';
-    if (!open) { panel.style.display = 'none'; findTarget(); }
+    if (!open) { panel.style.display = 'none'; const nb = document.getElementById('eht-npc'); if (nb) nb.style.display = 'none'; findTarget(); }
   };
   cq('#eht-next').onclick = findTarget;
 
@@ -1005,7 +1017,8 @@ document.documentElement.dataset.novaTornHelper = '1';
 
   function checkTravel() {
     const t = bars?.travel;
-    const panelsOpen = panel.style.display === 'block' || card.style.display === 'block';
+    const panelsOpen = panel.style.display === 'block' || card.style.display === 'block'
+      || (document.getElementById('eht-npc') || {}).style?.display === 'block';
     if (!t || !t.timestamp) { flyEl.style.display = 'none'; return; }
     const left = t.timestamp - Math.floor(Date.now() / 1000);
     if (left > 0) {
@@ -1175,32 +1188,138 @@ document.documentElement.dataset.novaTornHelper = '1';
     }
   }
 
+  // ---------- 🧟 NPC loot timers ----------
+  // YATA's public loot API gives the time each NPC left hospital. Loot level then
+  // rises: I at once, II +30 min, III +90 min, IV +210 min, V +450 min.
+  // YATA allows 10 calls/hour per IP, so we ask at most every 10 minutes and share
+  // the answer across pages.
+  const LOOT_MIN = [0, 30, 90, 210, 450];                 // minutes after leaving hospital → level I…V
+  const ROMAN = ['I', 'II', 'III', 'IV', 'V'];
+  const NPC_WARN_SEC = 5 * 60;                            // beep 5 min before level IV
+  const NPC_NAMES = { 4: 'Duke', 15: 'Leslie', 19: 'Jimmy', 20: 'Fernando', 21: 'Tiny' };   // shown until Torn gives the real name
+
+  const nbtn = document.createElement('button');
+  nbtn.id = 'eht-nbtn';
+  nbtn.textContent = '🧟';
+  nbtn.title = 'NPC loot timers';
+  const npcBox = document.createElement('div');
+  npcBox.id = 'eht-npc';
+  npcBox.innerHTML = '<header>🧟 NPC loot <span class="np-age"></span></header><div class="np-list"></div>'
+    + '<div class="np-note">Loot level IV = 3.5 h after leaving hospital. Data from YATA, updated every ~10 min.</div>';
+  document.body.append(nbtn, npcBox);
+
+  let npcData = null;           // { t: fetched at (ms), out: { id: hosp_out (s) } }
+  try { npcData = JSON.parse(LS.get('npc', 'null')); } catch {}
+  let npcBusy = false;
+  let npcNames = {};
+  try { npcNames = JSON.parse(LS.get('npcnames', '{}')) || {}; } catch {}
+
+  async function loadNpc(force) {
+    if (npcBusy) return;
+    if (!force && npcData && Date.now() - npcData.t < 10 * 60 * 1000) return;   // max ~6 calls/hour
+    npcBusy = true;
+    try {
+      const j = JSON.parse(await httpGet('https://yata.yt/api/v1/loot/'));
+      const out = j && (j.hosp_out || (j.loot && j.loot.hosp_out));
+      if (!out || typeof out !== 'object') throw new Error((j && (j.error && (j.error.error || j.error))) || 'unexpected answer from YATA');
+      npcData = { t: Date.now(), out: {} };
+      for (const [id, ts] of Object.entries(out)) if (+ts > 0) npcData.out[id] = +ts;
+      LS.set('npc', JSON.stringify(npcData));
+      npcData.err = '';
+      // real names from Torn, once per NPC
+      for (const id of Object.keys(npcData.out)) {
+        if (npcNames[id] || !getKey()) continue;
+        try { const u = await api(`user/${id}?selections=basic`); if (u.name) npcNames[id] = u.name; } catch {}
+      }
+      LS.set('npcnames', JSON.stringify(npcNames));
+    } catch (e) {
+      npcData = npcData || { t: 0, out: {} };
+      npcData.err = String(e.message || e);
+      npcData.t = Date.now() - 8 * 60 * 1000;    // try again in ~2 minutes
+    }
+    npcBusy = false;
+  }
+
+  // level + next step for one NPC, from its hospital-out time
+  function npcState(out, now) {
+    if (now < out) return { hosp: true, left: out - now };
+    const mins = (now - out) / 60;
+    let lvl = 0;
+    LOOT_MIN.forEach((m, i) => { if (mins >= m) lvl = i; });
+    const toIV = out + LOOT_MIN[3] * 60 - now;
+    return { hosp: false, lvl, toIV };
+  }
+
+  function renderNpc() {
+    if (npcBox.style.display !== 'block') return;
+    const list = npcBox.querySelector('.np-list');
+    const now = Math.floor(Date.now() / 1000);
+    if (!npcData || !Object.keys(npcData.out || {}).length) {
+      list.innerHTML = `<div class="np-row">${npcData && npcData.err ? '⚠️ Could not load NPC times: ' + esc(npcData.err) : 'Loading…'}</div>`;
+      return;
+    }
+    const rows = Object.entries(npcData.out).map(([id, out]) => ({ id, out, ...npcState(out, now) }))
+      // soonest useful first: in hospital / before IV by time to IV, then IV/V
+      .sort((a, b) => (a.hosp ? a.left + LOOT_MIN[3] * 60 : a.toIV) - (b.hosp ? b.left + LOOT_MIN[3] * 60 : b.toIV));
+    list.innerHTML = rows.map(r => {
+      const name = esc(npcNames[r.id] || NPC_NAMES[r.id] || 'NPC #' + r.id);
+      let info, cls = '';
+      if (r.hosp) info = `🏥 out in ${fmt(r.left)}`;
+      else if (r.lvl >= 3) { info = `<b>Lvl ${ROMAN[r.lvl]}</b> — ready`; cls = 'np-ready'; }
+      else { info = `Lvl ${ROMAN[r.lvl]} · IV in <b>${fmt(r.toIV)}</b>`; if (r.toIV <= NPC_WARN_SEC) cls = 'np-soon'; }
+      return `<div class="np-row ${cls}"><a href="https://www.torn.com/profiles.php?XID=${esc(r.id)}">${name}</a>`
+        + `<span>${info} <a class="atk" href="${attackUrl(r.id)}" title="Attack">⚔️</a></span></div>`;
+    }).join('');
+    const age = Math.round((Date.now() - npcData.t) / 60000);
+    npcBox.querySelector('.np-age').textContent = npcData.err ? '⚠️ old data' : `updated ${age} min ago`;
+  }
+
+  // beep once per NPC per cycle, 5 minutes before level IV (works on any page)
+  function checkNpc() {
+    if (!npcData || !npcData.out || !alertOn) return;
+    const now = Math.floor(Date.now() / 1000);
+    for (const [id, out] of Object.entries(npcData.out)) {
+      const st = npcState(out, now);
+      if (st.hosp || st.toIV > NPC_WARN_SEC || st.toIV < -60) continue;
+      if (LS.get('npcwarn_' + id, '') === String(out)) continue;
+      LS.set('npcwarn_' + id, String(out));
+      notify(`🧟 ${npcNames[id] || NPC_NAMES[id] || 'NPC #' + id} reaches loot level IV in ${fmt(Math.max(st.toIV, 0))} — get ready!`);
+    }
+  }
+
+  nbtn.onclick = () => {
+    unlockSound();
+    const open = npcBox.style.display === 'block';
+    npcBox.style.display = open ? 'none' : 'block';
+    if (!open) { panel.style.display = 'none'; card.style.display = 'none'; loadNpc().then(renderNpc); renderNpc(); }
+  };
+
   // ---------- move the buttons out of the way ----------
   // Press and drag 🎯 or 🏥 to move both buttons; everything that pops up from
   // them (panels, chain timer, flight timer, messages) moves along. Remembered.
-  const HOME = { 'eht-btn': [10, 90], 'eht-tbtn': [60, 90], 'eht-panel': [10, 140], 'eht-card': [10, 140],
-    'eht-toast': [10, 145], 'eht-fly': [10, 140], 'eht-chain': [110, 96] };
+  const HOME = { 'eht-btn': [10, 90], 'eht-tbtn': [60, 90], 'eht-nbtn': [110, 90], 'eht-panel': [10, 140], 'eht-card': [10, 140],
+    'eht-npc': [10, 140], 'eht-toast': [10, 145], 'eht-fly': [10, 140], 'eht-chain': [160, 96] };
   let off = { x: 0, y: 0 };
   try { off = JSON.parse(LS.get('dock', '{"x":0,"y":0}')) || off; } catch {}
   function placeAll() {
-    off.x = Math.max(0, Math.min(off.x, window.innerWidth - 120));
+    off.x = Math.max(0, Math.min(off.x, window.innerWidth - 170));
     off.y = Math.max(-80, Math.min(off.y, window.innerHeight - 150));
     for (const [id, [r, b]] of Object.entries(HOME)) {
       const el = document.getElementById(id);
       if (!el) continue;
       // keep wide things (panels, pop-ups) inside the screen on the left side
-      const w = { 'eht-panel': 300, 'eht-card': 270, 'eht-toast': 220, 'eht-fly': 170, 'eht-chain': 150 }[id] || 0;
+      const w = { 'eht-panel': 300, 'eht-card': 270, 'eht-npc': 280, 'eht-toast': 220, 'eht-fly': 170, 'eht-chain': 150 }[id] || 0;
       el.style.right = Math.max(4, Math.min(r + off.x, window.innerWidth - w - 8)) + 'px';
       el.style.bottom = (b + off.y) + 'px';
-      if (id === 'eht-panel' || id === 'eht-card') el.style.maxHeight = Math.max(160, window.innerHeight - (b + off.y) - 10) + 'px';
+      if (id === 'eht-panel' || id === 'eht-card' || id === 'eht-npc') el.style.maxHeight = Math.max(160, window.innerHeight - (b + off.y) - 10) + 'px';
     }
   }
   let drag = null, draggedAt = 0;
   // a click right after a drag (on 🎯/🏥 only) should not open the panel
   window.addEventListener('click', e => {
-    if (Date.now() - draggedAt < 350 && (btn.contains(e.target) || tbtn.contains(e.target))) { e.stopPropagation(); e.preventDefault(); }
+    if (Date.now() - draggedAt < 350 && [btn, tbtn, nbtn].some(x => x.contains(e.target))) { e.stopPropagation(); e.preventDefault(); }
   }, true);
-  for (const el of [btn, tbtn]) {
+  for (const el of [btn, tbtn, nbtn]) {
     el.style.touchAction = 'none';
     el.addEventListener('pointerdown', ev => {
       drag = { sx: ev.clientX, sy: ev.clientY, ox: off.x, oy: off.y, moved: false };
@@ -1229,6 +1348,8 @@ document.documentElement.dataset.novaTornHelper = '1';
   setInterval(() => {
     checkAlerts();
     checkBars();
+    checkNpc();
+    renderNpc();
     if (document.hidden) return;
     renderPanel();
     decorateRows();
@@ -1240,6 +1361,8 @@ document.documentElement.dataset.novaTornHelper = '1';
       if (miss.length) ffFetch(miss);
     }
   }, 1000);
+  setInterval(() => { if (!document.hidden) loadNpc(); }, 60 * 1000);
+  loadNpc();
   setInterval(() => {
     if (document.hidden) return;   // save API calls while Torn isn't on screen
     if (location.pathname.includes('factions.php') || panel.style.display === 'block') refresh();

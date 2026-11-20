@@ -39,6 +39,10 @@ https://raw.githubusercontent.com/etherhtun/nova-torn-helper/main/scripts/nova-t
   - ⚔️ attack link on every row.
 - **🎯 Target finder** (green button): a player in your FF range who's ready to fight, for outside hits. **Next ▶** for another.
 
+### 🧟 NPC loot
+- Purple **🧟** button: every NPC's loot level (I–V), a countdown to **level IV** (the usual time to attack), and an ⚔️ attack link. Green = level IV or higher, yellow = less than 5 minutes to IV.
+- Beeps 5 minutes before an NPC reaches level IV. Loot times from [YATA](https://yata.yt/loot/), refreshed about every 10 minutes.
+
 ### ⛓️ Alarms (while Torn is open)
 - **Chain timer + alarm:** while your faction chain (10+) runs, a ⛓️ timer shows on screen. Below the warning time it turns yellow and beeps every 10s; under 30s it flashes red and beeps every 3s — until someone hits. Tap the timer to choose when it starts: 1:00 / 1:30 / 2:00 / 3:00.
 - **💊 Drug cooldown over** · **⚡ Energy full** · **✈️ Landed** — one beep each.
