@@ -48,11 +48,11 @@ https://raw.githubusercontent.com/etherhtun/nova-torn-helper/main/scripts/nova-t
 - **💊 Drug cooldown over** · **⚡ Energy full** · **✈️ Landed** — one beep each.
 - Turn all alarms on/off with the 🔔 button in the 🏥 panel. Tap Torn once after opening it so the browser allows sound.
 
-### 💪 Gym page
-- Your battle stats, share and **effective stats** (with each bonus/penalty).
-- **📊 Check** (like Torn Stats' manual update): shows what you gained since your last check, then saves now as the new last check. Between checks the box previews your gains so far.
-- **🎯 Train next:** which stat to train now, from an attacker's plan (Speed 40% · Strength 35% · Defense 15% · top stat 10%), skipping any stat close to your specialty gym limit.
-- How high your other stats can go while your top stat keeps its 25% lead for its specialty gym (Elites, Gym 3000, Mr. Isoyama's, Total Rebound).
+### 🏋️ Gym page — training guide
+- **🎯 Train next:** the stat to train now, picked from your plan and your real stats.
+- **⚡ Today's energy, split for you**, e.g. "With your 150 energy now: Speed 70 · Dexterity 45 · Strength 30 · Defense 10".
+- **Plan button:** switch between **Dex + Speed** (Speed 45 · Dex 30 · Strength 20 · Defense 5) and **Attacker** (Speed 40 · Strength 35 · Defense 15 · top stat 10). Remembered.
+- How high your other stats can go while your top stat keeps its 25% lead for its specialty gym (Elites, Gym 3000, Mr. Isoyama's, Total Rebound), with a warning if one gets close.
 
 ### ✈️ Travel
 - While flying: a ✈️ landing countdown on every page.

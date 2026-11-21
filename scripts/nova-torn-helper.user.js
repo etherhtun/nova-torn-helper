@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Nova Torn Helper
 // @namespace    nova-torn-helper
-// @version      4.6
-// @description  All-in-one: 🧟 NPC loot timers, 💪 battle stats on the Gym page, 💊 drug cooldown alarm, ✅ war targets, ✈️ travel helper, 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain timer + repeating chain alarm, ⚡ energy alert, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
+// @version      4.7
+// @description  All-in-one: 🧟 NPC loot timers, 🏋️ training guide on the Gym page, 💊 drug cooldown alarm, ✅ war targets, ✈️ travel helper, 🌍 where abroad/traveling players are, 💲 item market price helper, ⛓️ chain timer + repeating chain alarm, ⚡ energy alert, 🎯 FF target finder, enemy hospital timers + FF badges on every page + FF on profiles + 🏥 panel (faction/war pages), and a "Fill stock" button (company Stock page). Read-only / you press every game action yourself.
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_registerMenuCommand
@@ -872,101 +872,66 @@ document.documentElement.dataset.novaTornHelper = '1';
     return { strength: one('strength'), defense: one('defense'), speed: one('speed'), dexterity: one('dexterity') };
   }
 
-  async function renderGymBox(box, doCheck = false) {
+  // 🏋️ Training guide: which stat to train next, how to split today's energy,
+  // and the specialty gym limit. (PDA shows the stats themselves.)
+  // Plans = share of your energy per stat.
+  const PLANS = {
+    dexspd:   { label: 'Dex + Speed', w: { speed: 45, dexterity: 30, strength: 20, defense: 5 } },
+    attacker: { label: 'Attacker',    w: null },   // Speed 40 · Strength 35 · Defense 15 of the rest, 10% top stat
+  };
+  let gymPlan = LS.get('gymplan', 'dexspd');
+  if (!PLANS[gymPlan]) gymPlan = 'dexspd';
+
+  async function renderGymBox(box) {
     const body = box.querySelector('.ng-body');
+    box.querySelector('.ng-plan').textContent = `Plan: ${PLANS[gymPlan].label}`;
     body.textContent = 'Loading…';
     try {
       const raw = await loadBattleStats();
       const keys = Object.keys(STAT_NAMES);
-      const st = {}, eff = {};
-      keys.forEach(k => { st[k] = raw[k].v; eff[k] = Math.round(raw[k].v * (1 + raw[k].m / 100)); });
-      const effTotal = keys.reduce((t, k) => t + eff[k], 0);
-
-      // 📊 manual checks, like Torn Stats: "📊 Check" reports the gains since your
-      // LAST check, then saves now as the new last check.
-      const cur = {}; keys.forEach(k => { cur[k] = Math.round(st[k]); });
-      let last = null;
-      try {
-        const old = JSON.parse(LS.get('bsnap', 'null'));
-        last = old && old.v ? old : old && (old.prev || old.last) ? (old.prev || old.last) : null;   // older formats too
-      } catch {}
-      const ago = ms => { const h = Math.floor(ms / 3600000), d = Math.floor(h / 24);
-        return d >= 1 ? `${d} day${d > 1 ? 's' : ''}` : h >= 1 ? `${h} hour${h > 1 ? 's' : ''}` : ms < 60000 ? 'less than a minute' : `${Math.round(ms / 60000)} min`; };
-      const gainsVs = base => {
-        const ups = keys.map(k => [k, cur[k] - (base.v[k] || 0)]).filter(([, d]) => d > 0);
-        const sum = ups.reduce((t, [, d]) => t + d, 0);
-        return ups.length ? ups.map(([k, d]) => `${STAT_NAMES[k]} <b>+${d.toLocaleString()}</b>`).join(' · ')
-          + (ups.length > 1 ? ` · Total <b>+${sum.toLocaleString()}</b>` : '') : '';
-      };
-
-      if (doCheck && last && !gainsVs(last)) {
-        // nothing gained since the last check (e.g. a double tap): keep the last report as it is
-        toast.textContent = '📊 No new gains since your last check — your last report is kept.';
-        toast.style.display = 'block';
-        clearTimeout(toastTimer);
-        toastTimer = setTimeout(() => { toast.style.display = 'none'; }, 4000);
-      } else if (doCheck) {
-        // report: last check → now, then now becomes the last check
-        const now = Date.now();
-        const report = last
-          ? { t: now, text: (gainsVs(last) || 'no gains') + ` — since your previous check ${ago(now - last.t)} before` }
-          : { t: now, text: 'first check saved — your next check will show your gains' };
-        LS.set('breport', JSON.stringify(report));
-        last = { t: now, v: cur };
-        LS.set('bsnap', JSON.stringify(last));
-      }
-
-      let report = null;
-      try { report = JSON.parse(LS.get('breport', 'null')); } catch {}
-      let gainHtml = '';
-      if (report) gainHtml += `<div class="ng-report">📊 <b>Check ${ago(Date.now() - report.t)} ago:</b> ${report.text}</div>`;
-      if (last) {
-        const g = gainsVs(last);
-        gainHtml += `<div class="ng-gain">📈 Since your last check (${ago(Date.now() - last.t)} ago): `
-          + (g || 'no gains yet') + (g ? '. Tap 📊 Check to save.' : '') + '</div>';
-      } else {
-        gainHtml += '<div class="ng-gain">📈 Tap <b>📊 Check</b> to save your stats. Each check then shows your gains since the one before.</div>';
-      }
-      const modTxt = k => { const m = raw[k].m; return m ? `<span class="${m > 0 ? 'ng-up' : 'ng-down'}">(${m > 0 ? '+' : ''}${m}%)</span>` : ''; };
-      const total = keys.reduce((t, k) => t + st[k], 0);
+      const st = {};
+      keys.forEach(k => { st[k] = raw[k].v; });
       const sorted = keys.slice().sort((a, b) => st[b] - st[a]);
       const top = sorted[0], second = sorted[1];
       const cap = Math.floor(st[top] / 1.25);
       const keeps = st[second] <= cap;
 
-      // 🎯 train next: an attacker's plan — most energy into the other stats
-      // (Speed to hit, Strength for damage, then Defense); ~10% into your top stat.
-      const PLAN = { speed: 40, strength: 35, defense: 15, dexterity: 15 };
-      const others = keys.filter(k => k !== top);
-      const w = {}; others.forEach(k => { w[k] = PLAN[k]; });
-      const wSum = others.reduce((t, k) => t + w[k], 0);
-      others.forEach(k => { w[k] = Math.round(w[k] / wSum * 90); });   // 90% split over the other three
-      w[top] = 10;
-      // the stat furthest behind the plan = lowest stat-per-weight among the other three
-      const behind = others.slice().sort((a, b) => st[a] / w[a] - st[b] / w[b]);
-      const nearCap = behind.filter(k => cap - st[k] < cap * 0.1);       // within 10% of the specialty limit
-      const next = behind.find(k => !nearCap.includes(k)) || top;
-      const trainHtml = `<div class="ng-train">🎯 <b>Train next: ${STAT_NAMES[next]}</b>`
-        + (behind[1] && behind[1] !== next ? ` (then ${STAT_NAMES[behind.find(k => k !== next && !nearCap.includes(k)) || top]})` : '')
-        + `. Suggested energy: ${keys.slice().sort((a, b) => w[b] - w[a]).map(k => `${STAT_NAMES[k]} ${w[k]}%`).join(' · ')}.`
-        + (nearCap.length ? ` ⚠️ ${nearCap.map(k => STAT_NAMES[k]).join(', ')} close to the ${SPECIALTY[top]} limit — train ${STAT_NAMES[top]} first.` : '')
-        + '</div>';
-      body.innerHTML = `<table><tr class="ng-hd"><td></td><td>Battle</td><td>Share</td><td>Effective</td></tr>${keys.map(k => `<tr${k === top ? ' class="ng-top"' : ''}><td>${STAT_NAMES[k]}</td>
-          <td>${Math.round(st[k]).toLocaleString()}</td><td>${(st[k] / total * 100).toFixed(0)}%</td>
-          <td>${eff[k].toLocaleString()} ${modTxt(k)}</td></tr>`).join('')}
-          <tr class="ng-total"><td>Total</td><td>${Math.round(total).toLocaleString()}</td><td></td><td>${effTotal.toLocaleString()}</td></tr></table>
-        ${gainHtml}${trainHtml}<div class="ng-tip">${keeps
+      // energy share per stat for the chosen plan
+      let w = {};
+      if (PLANS[gymPlan].w) w = { ...PLANS[gymPlan].w };
+      else {
+        const base = { speed: 40, strength: 35, defense: 15, dexterity: 15 };
+        const others = keys.filter(k => k !== top);
+        const sum = others.reduce((t, k) => t + base[k], 0);
+        others.forEach(k => { w[k] = Math.round(base[k] / sum * 90); });
+        w[top] = 10;
+      }
+      // the stat furthest behind the plan (lowest stat per % of energy), skipping
+      // any stat close to the specialty limit
+      const nearCap = keys.filter(k => k !== top && cap - st[k] < cap * 0.1);
+      const behind = keys.filter(k => w[k] > 0 && !nearCap.includes(k)).sort((a, b) => st[a] / w[a] - st[b] / w[b]);
+      const next = behind[0] || top, then = behind[1];
+
+      // today's energy, split by the plan (rounded to 5)
+      const order = keys.slice().sort((a, b) => w[b] - w[a]).filter(k => w[k] > 0);
+      const en = bars && bars.energy ? bars.energy.current : null;
+      const split = en && en >= 5
+        ? `With your <b>${en}</b> energy now: ` + order.map(k => `${STAT_NAMES[k]} <b>${Math.round(en * w[k] / 100 / 5) * 5}</b>`).join(' · ')
+        : `Energy split: ` + order.map(k => `${STAT_NAMES[k]} <b>${w[k]}%</b>`).join(' · ');
+
+      body.innerHTML = `<div class="ng-train">🎯 <b>Train next: ${STAT_NAMES[next]}</b>${then ? ` (then ${STAT_NAMES[then]})` : ''}</div>
+        <div class="ng-gain">⚡ ${split}</div>`
+        + (nearCap.length ? `<div class="ng-gain">⚠️ ${nearCap.map(k => STAT_NAMES[k]).join(', ')} close to the ${SPECIALTY[top]} limit — train ${STAT_NAMES[top]} first.</div>` : '')
+        + `<div class="ng-tip">${keeps
           ? `🏋️ To keep <b>${SPECIALTY[top]}</b> (${STAT_NAMES[top]} 25% ahead), keep every other stat under <b>${cap.toLocaleString()}</b>.`
             + ` Room left: ${keys.filter(k => k !== top).map(k => `${STAT_NAMES[k]} +${Math.max(0, cap - Math.round(st[k])).toLocaleString()}`).join(' · ')}`
           : `⚠️ ${STAT_NAMES[second]} is within 25% of ${STAT_NAMES[top]}, so ${SPECIALTY[top]} needs ${STAT_NAMES[top]} at ${Math.ceil(st[second] * 1.25).toLocaleString()}.`}</div>`;
-      body.querySelectorAll('td, b, .ng-up, .ng-down').forEach(el => el.style.setProperty('color',
-        el.tagName === 'B' ? '#5dff7a' : el.classList.contains('ng-up') ? '#6fcf6f' : el.classList.contains('ng-down') ? '#ff6b6b'
-          : el.closest('.ng-hd') ? '#999' : '#eee', 'important'));
+      body.querySelectorAll('b').forEach(el => el.style.setProperty('color', '#5dff7a', 'important'));
     } catch (e) {
       const msg = e.message || String(e);
       body.textContent = /error (16|2)\b/.test(msg)
-        ? '🔑 Battle stats need a LIMITED (or Full) API key. ' + msg
-        : '⚠️ Could not load battle stats: ' + msg;
+        ? '🔑 The training guide needs a LIMITED (or Full) API key. ' + msg
+        : '⚠️ Could not load your stats: ' + msg;
     }
   }
 
@@ -976,11 +941,16 @@ document.documentElement.dataset.novaTornHelper = '1';
     if (!anchor) return;
     const box = document.createElement('div');
     box.id = 'nova-gym';
-    box.innerHTML = '<div class="ng-head">💪 My battle stats <span><button class="ng-check" title="Show gains since your last check, then save this as the new last check">📊 Check</button> '
-      + '<button class="ng-go" title="Reload stats">↻</button></span></div><div class="ng-body"></div>';
+    box.innerHTML = '<div class="ng-head">🏋️ Training guide <span><button class="ng-plan" title="Switch training plan"></button> '
+      + '<button class="ng-go" title="Reload">↻</button></span></div><div class="ng-body"></div>';
     if (anchor.classList.contains('content-title')) anchor.after(box); else anchor.prepend(box);
     box.querySelector('.ng-go').onclick = () => renderGymBox(box);
-    box.querySelector('.ng-check').onclick = () => renderGymBox(box, true);
+    box.querySelector('.ng-plan').onclick = () => {
+      const ks = Object.keys(PLANS);
+      gymPlan = ks[(ks.indexOf(gymPlan) + 1) % ks.length];
+      LS.set('gymplan', gymPlan);
+      renderGymBox(box);
+    };
     renderGymBox(box);
   }
 
